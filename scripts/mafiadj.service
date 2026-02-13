@@ -1,0 +1,26 @@
+[Unit]
+Description=MafiaDJ Discord Music Bot
+After=network.target
+
+[Service]
+Type=simple
+User=mafiadj
+WorkingDirectory=/opt/mafiadj
+ExecStart=/usr/bin/node dist/index.js
+Restart=always
+RestartSec=10
+EnvironmentFile=/opt/mafiadj/.env
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=mafiadj
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/opt/mafiadj/data
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,34 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+release/
+bin/
+
+# Environment variables & Secrets
+.env
+.env.test
+.env.production
+
+# Data & Logs
+data/*.db
+data/*.sqlite
+data/*.json
+!data/example.db
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# System Files
+.DS_Store
+Thumbs.db
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo

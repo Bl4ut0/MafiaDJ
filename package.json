@@ -1,0 +1,41 @@
+{
+  "name": "mafiadj",
+  "version": "1.0.0",
+  "description": "A self-hosted Discord music bot for personal use.",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "nodemon src/index.ts",
+    "deploy": "ts-node src/bot/deploy-commands.ts",
+    "lint": "eslint . --ext .ts"
+  },
+  "keywords": [
+    "discord",
+    "music",
+    "bot",
+    "typescript"
+  ],
+  "author": "MafiaDJ",
+  "license": "ISC",
+  "dependencies": {
+    "better-sqlite3": "^9.0.0",
+    "discord.js": "^14.14.0",
+    "@discordjs/voice": "^0.16.0",
+    "@discordjs/opus": "^0.9.0",
+    "sodium-native": "^4.0.0",
+    "dotenv": "^16.0.0",
+    "pino": "^8.0.0",
+    "pino-pretty": "^10.0.0",
+    "spotify-web-api-node": "^5.0.0",
+    "zod": "^3.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "@types/node": "^20.0.0",
+    "@types/better-sqlite3": "^7.0.0",
+    "@types/spotify-web-api-node": "^5.0.0",
+    "ts-node": "^10.0.0",
+    "nodemon": "^3.0.0"
+  }
+}

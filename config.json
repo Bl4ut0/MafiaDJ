@@ -1,0 +1,29 @@
+{
+    "bot": {
+        "name": "MafiaDJ",
+        "embedColor": "#7C3AED",
+        "logLevel": "info"
+    },
+    "playback": {
+        "defaultVolume": 50,
+        "maxQueueLength": 200,
+        "maxDurationSeconds": 10800,
+        "duplicatePrevention": false,
+        "spotifyMode": "librespot"
+    },
+    "voice": {
+        "autoDisconnectSeconds": 300,
+        "disconnectWhenAlone": true,
+        "twentyFourSeven": false
+    },
+    "permissions": {
+        "voteSkipThreshold": 50,
+        "voteStopThreshold": 66
+    },
+    "paths": {
+        "ytdlp": "yt-dlp",
+        "ffmpeg": "ffmpeg",
+        "librespot": "librespot",
+        "database": "./data/mafiadj.db"
+    }
+}
