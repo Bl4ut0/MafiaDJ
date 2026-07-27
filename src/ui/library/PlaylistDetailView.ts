@@ -29,7 +29,7 @@ export class PlaylistDetailView {
             .setFooter({ text: `Page ${page} of ${totalPages}` });
 
         if (tracks.length > 0) {
-            const list = tracks.map((t: any, i) =>
+            const list = tracks.map((t: any, i: number) =>
                 `**${offset + i + 1}.** [${t.title}](${t.url}) - ${t.artist}`
             ).join('\n');
             embed.addFields({ name: 'Tracks', value: list });

@@ -1,4 +1,4 @@
-import { ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, EmbedBuilder, Utils } from 'discord.js';
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, EmbedBuilder } from 'discord.js';
 import { Favorites } from '../../database/Favorites';
 import { LibraryManager } from './LibraryManager'; // Will create this next
 import { QueueItem } from '../../types';

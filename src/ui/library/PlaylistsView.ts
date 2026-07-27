@@ -14,7 +14,7 @@ export class PlaylistsView {
             );
 
         if (playlists.length > 0) {
-            const list = playlists.map((p, i) => {
+            const list = playlists.map((p: any, i: number) => {
                 const tracks = PersonalPlaylists.getTracks(p.id);
                 return `**${i + 1}.** ${p.name} • ${tracks.length} track${tracks.length !== 1 ? 's' : ''}`;
             }).join('\n');
