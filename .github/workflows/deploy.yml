@@ -52,10 +52,13 @@ jobs:
     name: Auto-Deploy to Target Server via SSH (Optional)
     needs: build-and-push
     runs-on: ubuntu-latest
-    if: ${{ secrets.SSH_HOST != '' && secrets.SSH_USER != '' }}
+    env:
+      SSH_HOST: ${{ secrets.SSH_HOST }}
+      SSH_USER: ${{ secrets.SSH_USER }}
 
     steps:
       - name: Deploy Container via SSH
+        if: ${{ env.SSH_HOST != '' && env.SSH_USER != '' }}
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.SSH_HOST }}
