@@ -12,6 +12,7 @@ RUN npm install
 
 COPY src ./src
 RUN npm run build
+RUN npm prune --omit=dev
 
 # Stage 2: Production runner
 FROM node:22-slim AS runner
@@ -39,10 +40,8 @@ RUN curl -L https://github.com/librespot-org/librespot/releases/download/v0.8.0/
 
 COPY package*.json ./
 
-# Install production dependencies only
-RUN npm install --omit=dev
-
-# Copy compiled JavaScript and static dashboard files from builder stage
+# Copy pre-compiled node_modules, JavaScript dist, and static assets from builder stage
+COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
 COPY src/dashboard/public ./src/dashboard/public
 
