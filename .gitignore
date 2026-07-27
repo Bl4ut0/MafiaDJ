@@ -9,8 +9,12 @@ bin/
 
 # Environment variables & Secrets
 .env
-.env.test
-.env.production
+.env.*
+release_*
+spotify_cache/
+.local-node/
+local-env.ps1
+rustup-init.exe
 
 # Data & Logs
 data/*.db

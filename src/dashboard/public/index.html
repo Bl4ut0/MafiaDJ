@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MafiaDJ — Web Player</title>
+  <meta name="description" content="MafiaDJ web companion — control your music from the browser.">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<!-- ── Background Blur ── -->
+<div id="bg-blur"></div>
+
+<!-- ── Login Screen ── -->
+<div id="login-screen">
+  <div class="login-card">
+    <div class="login-logo"><img src="/logo.png" alt="MafiaDJ Logo"></div>
+    <h1>MafiaDJ</h1>
+    <p>Log in with your Discord account to access the web player for your server.</p>
+    <a href="/auth/login" class="btn-discord" id="login-btn">
+      <svg viewBox="0 0 71 55" xmlns="http://www.w3.org/2000/svg">
+        <path d="M60.1045 4.8978C55.5792 2.8214 50.7265 1.2916 45.6527 0.41542C45.5603 0.39851 45.468 0.440769 45.4204 0.525289C44.7963 1.6353 44.105 3.0834 43.6209 4.2216C38.1637 3.4046 32.7345 3.4046 27.3892 4.2216C26.905 3.0581 26.1886 1.6353 25.5617 0.525289C25.5141 0.443589 25.4218 0.40133 25.3294 0.41542C20.2584 1.2888 15.4057 2.8186 10.8776 4.8978C10.8384 4.9147 10.8048 4.9429 10.7825 4.9795C1.57795 18.7309 -0.943561 32.1443 0.293408 45.3914C0.299005 45.4562 0.335386 45.5182 0.385761 45.5576C6.45866 50.0174 12.3413 52.7249 18.1147 54.5195C18.2071 54.5477 18.305 54.5139 18.3638 54.4378C19.7295 52.5728 20.9469 50.6063 21.9907 48.5383C22.0523 48.4172 21.9935 48.2735 21.8676 48.2256C19.9366 47.4931 18.0979 46.6 16.3292 45.5858C16.1893 45.5041 16.1781 45.304 16.3068 45.2082C16.679 44.9293 17.0513 44.6391 17.4067 44.3461C17.471 44.2926 17.5633 44.2813 17.6388 44.3151C29.2467 49.6 41.8354 49.6 53.3092 44.3151C53.3847 44.2785 53.477 44.2898 53.5441 44.3433C53.8995 44.6363 54.2718 44.9293 54.6468 45.2082C54.7755 45.304 54.7671 45.5041 54.6244 45.5858C52.8557 46.6197 51.0142 47.4931 49.0888 48.2228C48.9629 48.2707 48.9069 48.4172 48.9685 48.5383C50.0347 50.6035 51.2521 52.5699 52.5924 54.435C52.6484 54.5139 52.7491 54.5477 52.8415 54.5195C58.6428 52.7249 64.5254 50.0174 70.5983 45.5576C70.6515 45.5182 70.6851 45.459 70.6907 45.3942C72.1747 30.0791 68.2147 16.7757 60.1968 4.9823C60.1772 4.9429 60.1437 4.9147 60.1045 4.8978Z"/>
+      </svg>
+      Login with Discord
+    </a>
+  </div>
+</div>
+
+<!-- ── App ── -->
+<div id="app">
+
+  <!-- Top Bar -->
+  <header class="topbar">
+    <div class="topbar-logo"><img src="/logo.png" alt="Logo" class="topbar-logo-img"> <span>MafiaDJ</span></div>
+    <div class="topbar-server">
+      <img id="server-icon" src="" alt="" style="display:none">
+      <span class="topbar-server-name" id="server-name">Loading...</span>
+    </div>
+    
+    <div class="topbar-search">
+      <button class="btn-global-search" onclick="openSearchModal()">
+        <span style="opacity: 0.5;">🔍</span> Search across all platforms...
+      </button>
+    </div>
+
+    <div class="topbar-spacer"></div>
+    <div class="topbar-user">
+      <img class="topbar-user-avatar" id="user-avatar" src="" alt="">
+      <span class="topbar-user-name" id="user-name"></span>
+      <span class="role-badge" id="role-badge"></span>
+      <button class="btn-logout" onclick="location.href='/auth/logout'">Logout</button>
+    </div>
+  </header>
+
+  <!-- Main -->
+  <div class="main">
+
+    <!-- Now Playing -->
+    <section class="now-playing" id="now-playing-panel">
+
+      <!-- Spotify Jam Banner -->
+      <div class="jam-banner" id="jam-banner">
+        <img src="/logo.png" alt="Logo" style="height: 18px; width: auto;"> Spotify Jam Active — Spotify is choosing what plays next
+      </div>
+
+      <!-- Idle State -->
+      <div class="idle-state" id="idle-state">
+        <div class="idle-icon">🎧</div>
+        <p>Nothing is playing right now.<br>Use Discord or the search panel to add a track.</p>
+        <div id="join-area" style="margin-top: 16px; display: none;" class="dj-only">
+          <select id="channel-select" class="search-input" style="max-width: 240px; display: inline-block; margin-right: 8px;">
+            <option value="">Select a voice channel...</option>
+          </select>
+          <button class="search-btn" onclick="joinSelectedChannel()">Join</button>
+        </div>
+      </div>
+
+      <!-- Playing State (hidden when idle) -->
+      <div id="playing-state" class="hidden">
+        <!-- Artwork -->
+        <div class="artwork-wrap" id="artwork-wrap">
+          <img id="artwork-img" src="" alt="Album art" onerror="this.style.display='none';document.getElementById('artwork-fallback').style.display='flex'">
+          <div class="artwork-fallback" id="artwork-fallback" style="display:none"><img src="/logo.png" alt="Logo" style="width: 80px; opacity: 0.7;"></div>
+          <span class="source-badge" id="source-badge">YouTube</span>
+        </div>
+
+        <!-- Info -->
+        <div class="track-info" style="position: relative;">
+          <div class="track-title" id="track-title">Track Title</div>
+          <div class="track-artist" id="track-artist">Artist</div>
+          <div class="track-requester" id="track-requester">Added by —</div>
+          <button class="btn-like" id="btn-like" onclick="toggleFavorite()" title="Add to Favorites">🤍</button>
+        </div>
+
+        <!-- Progress -->
+        <div class="progress-wrap">
+          <div class="progress-times">
+            <span id="time-elapsed">0:00</span>
+            <span id="time-total">0:00</span>
+          </div>
+          <div class="progress-bar" id="progress-bar">
+            <div class="progress-fill" id="progress-fill" style="width:0%"></div>
+          </div>
+        </div>
+
+        <!-- Controls -->
+        <div class="controls">
+          <button class="ctrl-btn dj-only" id="btn-prev" title="Previous" onclick="apiPost('/api/skip')">⏮</button>
+          <button class="ctrl-btn dj-only" id="btn-loop" title="Loop" onclick="apiPost('/api/loop')">🔁</button>
+          <button class="ctrl-btn primary dj-only" id="btn-playpause" title="Pause/Resume" onclick="togglePause()">⏸</button>
+          <button class="ctrl-btn dj-only" id="btn-skip" title="Skip" onclick="apiPost('/api/skip')">⏭</button>
+          <button class="ctrl-btn dj-only" id="btn-shuffle" title="Shuffle" onclick="apiPost('/api/shuffle')">🔀</button>
+        </div>
+
+        <!-- Volume -->
+        <div class="volume-wrap">
+          <span class="volume-icon" id="volume-icon">🔊</span>
+          <input type="range" class="volume-slider dj-only" id="volume-slider"
+                 min="0" max="100" value="50" oninput="onVolumeChange(this.value)">
+          <span style="font-size:12px;color:var(--text-sub);width:30px;text-align:right" id="volume-label">50</span>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-tabs">
+        <button class="tab-btn active" onclick="switchTab('queue')" id="tab-queue">Queue</button>
+        <button class="tab-btn" onclick="switchTab('library')" id="tab-library">Library</button>
+        <button class="tab-btn dj-only" onclick="switchTab('settings')" id="tab-settings">Settings</button>
+      </div>
+
+      <!-- Queue Panel -->
+      <div class="tab-panel active" id="panel-queue">
+        <div class="queue-empty" id="queue-empty">The queue is empty.</div>
+        <div id="queue-list"></div>
+      </div>
+
+      <!-- Library Panel -->
+      <div class="tab-panel" id="panel-library">
+        <div class="lib-header">
+            <button class="lib-tab active" onclick="switchLibView('favorites')" id="lib-tab-favorites">Favorites</button>
+            <button class="lib-tab" onclick="switchLibView('playlists')" id="lib-tab-playlists">Playlists</button>
+        </div>
+        
+        <!-- Favorites View -->
+        <div id="lib-view-favorites" class="lib-view active">
+            <div id="favorites-list">
+                <div style="padding:32px;text-align:center;color:var(--text-muted);font-size:14px">Loading favorites...</div>
+            </div>
+        </div>
+
+        <!-- Playlists View -->
+        <div id="lib-view-playlists" class="lib-view" style="display: none;">
+            <div style="padding: 16px;">
+                <div class="search-input-wrap">
+                    <input class="search-input" id="new-playlist-name" type="text" placeholder="New playlist name..." onkeydown="if(event.key==='Enter') createPlaylist()">
+                    <button class="search-btn" onclick="createPlaylist()">Create</button>
+                </div>
+            </div>
+            <div id="playlists-list">
+                <div style="padding:32px;text-align:center;color:var(--text-muted);font-size:14px">Loading playlists...</div>
+            </div>
+        </div>
+
+        <!-- Playlist Detail View -->
+        <div id="lib-view-playlist-detail" class="lib-view" style="display: none; flex-direction: column; flex: 1;">
+            <div class="lib-detail-header">
+                <button class="btn-back" onclick="switchLibView('playlists')">← Back</button>
+                <div class="lib-detail-title" id="lib-detail-title">Playlist Name</div>
+                <button class="search-btn" onclick="playPlaylist()" id="btn-play-playlist">Play All</button>
+            </div>
+            <div id="playlist-tracks-list" style="flex: 1; overflow-y: auto;"></div>
+        </div>
+      </div>
+
+      <!-- Settings Panel -->
+      <div class="tab-panel" id="panel-settings">
+        <div style="padding: 16px;">
+          <h3 style="margin-bottom: 16px; font-size: 16px; color: var(--text);">Playback Settings</h3>
+          
+          <div class="setting-row">
+            <div class="setting-info">
+              <div class="setting-title">Enable Spotify Playback</div>
+              <div class="setting-desc">Allow users to search and queue Spotify links.</div>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="toggle-spotify-playback" onchange="toggleSpotifyPlayback(this.checked)">
+              <span class="slider round"></span>
+            </label>
+          </div>
+          
+          <div class="setting-row">
+            <div class="setting-info">
+              <div class="setting-title">Spotify Jam (Autoplay)</div>
+              <div class="setting-desc">Automatically play recommended Spotify tracks when the queue is empty.</div>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="toggle-spotify-jam" onchange="toggleSpotifyJam(this.checked)">
+              <span class="slider round"></span>
+            </label>
+          </div>
+
+          <h3 style="margin: 24px 0 16px 0; font-size: 16px; color: var(--text);">Admin Actions</h3>
+          
+          <div class="setting-row">
+            <div class="setting-info">
+              <div class="setting-title">Clear Queue</div>
+              <div class="setting-desc">Remove all upcoming tracks from the queue immediately.</div>
+            </div>
+            <button class="search-btn" style="background: var(--red);" onclick="apiPost('/api/queue/clear'); showToast('Queue cleared');">Clear</button>
+          </div>
+          
+          <div class="setting-row">
+            <div class="setting-info">
+              <div class="setting-title">Disconnect Bot</div>
+              <div class="setting-desc">Force the bot to leave the current voice channel.</div>
+            </div>
+            <button class="search-btn" style="background: var(--red);" onclick="apiPost('/api/leave'); showToast('Bot disconnected');">Disconnect</button>
+          </div>
+
+        </div>
+      </div>
+
+    </aside>
+  </div>
+</div>
+
+<!-- ── Search Modal ── -->
+<div id="search-modal" class="modal-overlay hidden" onclick="if(event.target===this) closeSearchModal()">
+  <div class="modal-content search-modal-content">
+    <div class="search-modal-header">
+      <input class="search-input global-search-input" id="global-search-input" type="text" placeholder="Search tracks, artists, or paste a URL..." onkeydown="if(event.key==='Enter') doGlobalSearch()">
+      <button class="search-btn" onclick="doGlobalSearch()">Search</button>
+      <button class="btn-close-modal" onclick="closeSearchModal()">✕</button>
+    </div>
+    
+    <div class="universal-search-results" id="universal-search-results">
+      <div class="search-placeholder">
+        <div class="search-placeholder-icon">🔍</div>
+        <div>Search universally across YouTube, Spotify, and more.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Toasts ── -->
+<div id="toast-container" class="toast-container"></div>
+
+<script src="/app.js"></script>
+</body>
+</html>

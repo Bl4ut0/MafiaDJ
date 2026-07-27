@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  mafiadj:
+    image: bl4ut0/mafiadj:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mafiadj
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+      - ./spotify_cache:/app/spotify_cache

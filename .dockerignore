@@ -1,0 +1,17 @@
+node_modules
+dist
+.env
+.env.*
+data/*.db
+data/*.db-journal
+data/*.db-wal
+spotify_cache
+bin
+logs
+*.log
+.git
+.github
+PLANNING.md
+README.md
+rustup-init.exe
+release_*
