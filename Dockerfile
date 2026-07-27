@@ -1,6 +1,6 @@
 # Multi-stage build for MafiaDJ
 # Stage 1: Build TypeScript
-FROM node:20-slim AS builder
+FROM node:22-slim AS builder
 
 WORKDIR /app
 
@@ -8,13 +8,13 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y python3 make g++ gcc curl ca-certificates && rm -rf /var/lib/apt/lists/*
 
 COPY package*.json tsconfig.json ./
-RUN npm ci
+RUN npm install
 
 COPY src ./src
 RUN npm run build
 
 # Stage 2: Production runner
-FROM node:20-slim AS runner
+FROM node:22-slim AS runner
 
 WORKDIR /app
 
@@ -40,7 +40,7 @@ RUN curl -L https://github.com/librespot-org/librespot/releases/download/v0.8.0/
 COPY package*.json ./
 
 # Install production dependencies only
-RUN npm ci --omit=dev
+RUN npm install --omit=dev
 
 # Copy compiled JavaScript and static dashboard files from builder stage
 COPY --from=builder /app/dist ./dist
