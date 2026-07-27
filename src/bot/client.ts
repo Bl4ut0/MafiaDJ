@@ -1,5 +1,5 @@
 import { Client, GatewayIntentBits, Collection } from 'discord.js';
-import { config } from './config';
+import { config } from '../config';
 import path from 'path';
 import fs from 'fs';
 

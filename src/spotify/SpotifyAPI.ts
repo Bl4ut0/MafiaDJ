@@ -1,5 +1,5 @@
 import SpotifyWebApi from 'spotify-web-api-node';
-import { config } from '../../config';
+import { config } from '../config';
 
 // Singleton wrapper for Spotify Web API
 class SpotifyAPI {

@@ -15,7 +15,7 @@ export class SearchView {
             );
 
         if (results.length > 0) {
-            const list = results.slice(0, 15).map((t: any, i) =>
+            const list = results.slice(0, 15).map((t: any, i: number) =>
                 `**${i + 1}.** [${t.title}](${t.url}) - ${t.artist} • \`${formatDuration(t.duration)}\``
             ).join('\n');
             embed.addFields({ name: 'Results', value: list + (results.length > 15 ? `\n*...and ${results.length - 15} more*` : '') });

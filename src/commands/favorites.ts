@@ -41,7 +41,6 @@ export const command = {
                 guildId: voiceChannel.guild.id,
                 adapterCreator: voiceChannel.guild.voiceAdapterCreator as any,
             });
-            player.setConnection(player.connection);
             player.connection.subscribe(player.audioPlayer);
         }
 

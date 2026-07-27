@@ -109,12 +109,11 @@ export async function handleMessage(message: Message) {
                     guildId: voiceChannel.guild.id,
                     adapterCreator: voiceChannel.guild.voiceAdapterCreator as any,
                 });
-                player.setConnection(player.connection);
                 player.connection.subscribe(player.audioPlayer);
             }
 
             // Resolve tracks (supports playlists!)
-            const result = await resolveUrl(query, member.id, message.guildId!);
+            const result = await resolveUrl(query, member.id);
 
             if (Array.isArray(result)) {
                 result.forEach(track => player.queue.enqueue(track));

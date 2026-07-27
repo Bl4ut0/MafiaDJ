@@ -1,6 +1,6 @@
-import { EmbedBuilder, QueueItem } from 'discord.js'; // Importing QueueItem from discord.js is wrong. QueueItem is custom type.
-import { QueueItem as CustomQueueItem } from '../../types'; // Fix aliasing
-import { formatDuration, createProgressBar } from '../../utils/formatters';
+import { EmbedBuilder } from 'discord.js';
+import { QueueItem as CustomQueueItem } from '../types';
+import { formatDuration, createProgressBar } from '../utils/formatters';
 
 export function createNowPlayingEmbed(track: CustomQueueItem | null, queue: CustomQueueItem[], isPaused: boolean = false, isLooping: boolean = false, volume: number = 50) {
     const embed = new EmbedBuilder()

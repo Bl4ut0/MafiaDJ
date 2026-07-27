@@ -68,7 +68,7 @@ export class ControllerMessage {
             const embed = createNowPlayingEmbed(player.currentTrack, player.queue.getTracks(), false, player.isLooping, player.volume);
             const buttons = createControllerButtons(false, player.isLooping, player.volume);
 
-            const message = await channel.send({ embeds: [embed], components: buttons });
+            const message = await channel.send({ embeds: [embed], components: buttons as any });
             this.message = message;
             this.channelId = channel.id;
             this.messageId = message.id;
@@ -107,7 +107,7 @@ export class ControllerMessage {
 
             const buttons = createControllerButtons(isPaused, player.isLooping, player.volume);
 
-            await this.message.edit({ embeds: [embed], components: buttons });
+            await this.message.edit({ embeds: [embed], components: buttons as any });
         } catch (error) {
             console.error('Error updating controller message:', error);
         }

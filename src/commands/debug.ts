@@ -18,7 +18,7 @@ export const command = {
                 { name: 'Memory (RSS)', value: `${(memoryUsage.rss / 1024 / 1024).toFixed(2)} MB`, inline: true },
                 { name: 'Node Version', value: process.version, inline: true },
                 { name: 'Platform', value: `${os.platform()} (${os.release()})`, inline: true },
-                { name: 'Spotify Mode', value: config.playback?.spotifyMode || 'Fallback', inline: true }
+                { name: 'Spotify Mode', value: (config as any).playback?.spotifyMode || 'Fallback', inline: true }
             );
 
         await interaction.reply({ embeds: [embed], ephemeral: true });

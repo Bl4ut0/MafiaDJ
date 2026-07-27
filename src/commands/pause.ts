@@ -42,16 +42,16 @@ export const command = {
             voiceChannel,
             () => {
                 if (isPaused) player.resume(); else player.pause();
-                if (interaction.replied) interaction.channel?.send(isPaused ? '▶️ **Vote Passed!** Resumed.' : '⏸️ **Vote Passed!** Paused.');
+                if (interaction.replied && interaction.channel && 'send' in interaction.channel) (interaction.channel as any).send(isPaused ? '▶️ **Vote Passed!** Resumed.' : '⏸️ **Vote Passed!** Paused.');
             }
         );
 
         if (result.type === 'instant') {
             await interaction.reply(isPaused ? '▶️ **Resumed!**' : '⏸️ **Paused!**');
-        } else if (result.type === 'started') {
+        } else if (result.type === 'started' && (result as any).vote) {
             await interaction.reply({
                 content: `🗳️ **Vote Started to ${action.toUpperCase()}!**`,
-                embeds: [VoteManager.createVoteEmbed(result.vote!)]
+                embeds: [VoteManager.createVoteEmbed((result as any).vote)]
             });
         } else if (result.type === 'error') {
             await interaction.reply({ content: `❌ ${result.message}`, ephemeral: true });

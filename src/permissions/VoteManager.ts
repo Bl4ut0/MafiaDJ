@@ -10,7 +10,7 @@ interface Vote {
     required: number;
     messageId?: string;
     voiceChannelId: string;
-    expires at: number;
+    expires: number;
 }
 
 class VoteManager {

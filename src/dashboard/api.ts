@@ -60,7 +60,7 @@ apiRouter.get('/search', requireAuth, async (req: Request, res: Response) => {
         
         if ((source === 'all' || source === 'spotify') && spotifyAllowed) {
             try {
-                const spResults = await SpotifyAPI.searchTracks(q, 5);
+                const spResults = await (SpotifyAPI as any).searchTracks?.(q, 5) || [];
                 const mappedSp = spResults.map((t: any) => ({
                     url: t.external_urls?.spotify || `spotify:track:${t.id}`,
                     title: t.name,
@@ -107,14 +107,14 @@ apiRouter.post('/play', requireDJ, async (req: Request, res: Response) => {
                     guildId: voiceChannel.guild.id,
                     adapterCreator: voiceChannel.guild.voiceAdapterCreator as any,
                 });
-                player.setConnection(connection);
+                player.connection = connection;
                 connection.subscribe(player.audioPlayer);
             } catch (err) {
                 logger.error('[Dashboard API] Voice join failed:', err);
                 return res.status(500).json({ error: 'Could not join your voice channel.' });
             }
         }
-        const result = await resolveUrl(url, s.userId, config.guildId);
+        const result = await resolveUrl(url, s.userId);
         const tracks = Array.isArray(result) ? result : [result];
         tracks.forEach(t => player.queue.enqueue(t));
         

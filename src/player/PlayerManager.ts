@@ -18,9 +18,13 @@ class PlayerManager {
 
     public getPlayer(guildId: string): MusicPlayer {
         if (!this.players.has(guildId)) {
-            this.players.set(guildId, new MusicPlayer());
+            this.players.set(guildId, new MusicPlayer(guildId));
         }
         return this.players.get(guildId)!;
+    }
+
+    public getAllPlayers(): MusicPlayer[] {
+        return [...this.players.values()];
     }
 
     public deletePlayer(guildId: string) {

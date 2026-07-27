@@ -1,4 +1,4 @@
-### MafaiDJ - Types
+// MafiaDJ - Types
 export interface BotConfig {
     discordToken: string;
     discordClientId: string;
@@ -7,6 +7,12 @@ export interface BotConfig {
     spotifyClientSecret: string;
     spotifyUsername?: string;
     spotifyPassword?: string;
+    spotifyRefreshToken?: string;
+    bot?: { logLevel?: string };
+    playback?: { defaultVolume?: number };
+    permissions?: { voteSkipThreshold?: number; voteStopThreshold?: number };
+    paths?: { ytdlp?: string; ffmpeg?: string; librespot?: string };
+    [key: string]: any;
 }
 
 export interface Track {

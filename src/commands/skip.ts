@@ -42,16 +42,16 @@ export const command = {
             voiceChannel,
             () => {
                 player.playNext();
-                if (interaction.replied) interaction.channel?.send('⏭ **Vote Passed!** Skipped the track.');
+                if (interaction.replied && interaction.channel && 'send' in interaction.channel) (interaction.channel as any).send('⏭ **Vote Passed!** Skipped the track.');
             }
         );
 
         if (result.type === 'instant') {
             await interaction.reply('⏭ **Skipped!**');
-        } else if (result.type === 'started') {
+        } else if (result.type === 'started' && (result as any).vote) {
             await interaction.reply({
                 content: '🗳️ **Vote Started!**',
-                embeds: [VoteManager.createVoteEmbed(result.vote!)]
+                embeds: [VoteManager.createVoteEmbed((result as any).vote)]
             });
         } else if (result.type === 'success') {
             // Vote cast successfully but didn't trigger end (shouldn't happen on 'started')

@@ -7,15 +7,23 @@ import { searchYouTube } from '../sources/youtube';
 import { logger } from '../utils/logger';
 
 export class MusicPlayer extends EventEmitter {
+    public guildId: string;
     public queue: Queue;
     public audioPlayer: AudioPlayer;
     public connection: VoiceConnection | null = null;
     public currentTrack: QueueItem | null = null;
     public isLooping: boolean = false;
+    public loopMode: 'off' | 'track' | 'queue' = 'off';
     public volume: number = 50;
+    public spotifyAutoplay: boolean = false;
+    public spotifyPlaybackEnabled: boolean = true;
+    public playStartTime: number = 0;
+    public pauseStartTime: number = 0;
+    public totalPausedMs: number = 0;
 
-    constructor() {
+    constructor(guildId: string = '') {
         super();
+        this.guildId = guildId;
         this.queue = new Queue();
         this.audioPlayer = createAudioPlayer({
             behaviors: {
@@ -114,6 +122,42 @@ export class MusicPlayer extends EventEmitter {
 
     public resume() {
         this.audioPlayer.unpause();
+        this.emit('stateChange');
+    }
+
+    public setConnection(conn: VoiceConnection | null): void {
+        this.connection = conn;
+    }
+
+    public getElapsedSeconds(): number {
+        if (!this.playStartTime) return 0;
+        const now = Date.now();
+        let paused = this.totalPausedMs;
+        if (this.pauseStartTime > 0) {
+            paused += now - this.pauseStartTime;
+        }
+        return Math.floor((now - this.playStartTime - paused) / 1000);
+    }
+
+    public cycleLoopMode(): 'off' | 'track' | 'queue' {
+        switch (this.loopMode) {
+            case 'off': this.loopMode = 'track'; break;
+            case 'track': this.loopMode = 'queue'; break;
+            case 'queue': this.loopMode = 'off'; break;
+        }
+        this.isLooping = this.loopMode !== 'off';
+        this.emit('stateChange');
+        return this.loopMode;
+    }
+
+    public toggleSpotifyAutoplay(): boolean {
+        this.spotifyAutoplay = !this.spotifyAutoplay;
+        this.emit('stateChange');
+        return this.spotifyAutoplay;
+    }
+
+    public setSpotifyPlaybackEnabled(enabled: boolean): void {
+        this.spotifyPlaybackEnabled = enabled;
         this.emit('stateChange');
     }
 

@@ -13,7 +13,11 @@ export const command = {
             return;
         }
 
-        player.disconnect();
+        player.stop();
+        if (player.connection) {
+            player.connection.destroy();
+            player.connection = null;
+        }
         await interaction.reply('👋 Goodbye!');
     },
 };

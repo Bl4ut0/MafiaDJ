@@ -45,6 +45,54 @@ export class Favorites {
         }
     }
 
+    public static removeById(id: number, userId: string): boolean {
+        const stmt = db.prepare('DELETE FROM favorites WHERE id = ? AND user_id = ?');
+        const result = stmt.run(id, userId);
+        return result.changes > 0;
+    }
+
+    /** Toggle a favorite: add if not exists, remove if exists. Returns true if added, false if removed. */
+    public static toggle(userId: string, track: QueueItem): boolean {
+        const existing = db.prepare('SELECT id FROM favorites WHERE user_id = ? AND url = ?').get(userId, track.url);
+        if (existing) {
+            this.remove(userId, track.url);
+            return false; // Removed
+        } else {
+            this.add(userId, track);
+            return true; // Added
+        }
+    }
+
+    public static isFavorite(userId: string, url: string): boolean {
+        const existing = db.prepare('SELECT id FROM favorites WHERE user_id = ? AND url = ?').get(userId, url);
+        return !!existing;
+    }
+
+    public static getById(id: number): any {
+        return db.prepare('SELECT * FROM favorites WHERE id = ?').get(id) || null;
+    }
+
+    /** Search favorites by title or artist (case-insensitive) */
+    public static search(userId: string, query: string): QueueItem[] {
+        const rows = db.prepare(`
+            SELECT * FROM favorites 
+            WHERE user_id = ? AND (title LIKE ? OR artist LIKE ?) 
+            ORDER BY added_at DESC 
+            LIMIT 25
+        `).all(userId, `%${query}%`, `%${query}%`) as any[];
+
+        return rows.map(row => ({
+            title: row.title,
+            artist: row.artist,
+            url: row.url,
+            thumbnail: row.thumbnail,
+            duration: row.duration,
+            source: row.source,
+            requesterId: userId,
+            addedAt: new Date(row.added_at).getTime()
+        }));
+    }
+
     public static count(userId: string): number {
         const stmt = db.prepare('SELECT COUNT(*) as count FROM favorites WHERE user_id = ?');
         const row = stmt.get(userId) as any;

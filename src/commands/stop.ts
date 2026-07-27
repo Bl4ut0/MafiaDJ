@@ -42,16 +42,16 @@ export const command = {
                 player.stop();
                 if (player.connection) player.connection.destroy();
                 player.connection = null;
-                if (interaction.replied) interaction.channel?.send('⏹ **Vote Passed!** Stopped playback.');
+                if (interaction.replied && interaction.channel && 'send' in interaction.channel) (interaction.channel as any).send('⏹ **Vote Passed!** Stopped playback.');
             }
         );
 
         if (result.type === 'instant') {
             await interaction.reply('⏹ **Stopped!**');
-        } else if (result.type === 'started') {
+        } else if (result.type === 'started' && (result as any).vote) {
             await interaction.reply({
                 content: '🗳️ **Vote Started to Stop!**',
-                embeds: [VoteManager.createVoteEmbed(result.vote!)]
+                embeds: [VoteManager.createVoteEmbed((result as any).vote)]
             });
         } else if (result.type === 'error') {
             await interaction.reply({ content: `❌ ${result.message}`, ephemeral: true });

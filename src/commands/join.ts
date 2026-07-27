@@ -24,7 +24,7 @@ export const command = {
                 adapterCreator: voiceChannel.guild.voiceAdapterCreator as any,
             });
 
-            player.setConnection(connection);
+            player.connection = connection;
             connection.subscribe(player.audioPlayer);
 
             await interaction.reply(`✅ Joined **${voiceChannel.name}**!`);

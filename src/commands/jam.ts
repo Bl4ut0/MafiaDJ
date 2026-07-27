@@ -38,12 +38,11 @@ export const command = {
                     guildId: voiceChannel.guild.id,
                     adapterCreator: voiceChannel.guild.voiceAdapterCreator as any,
                 });
-                player.setConnection(player.connection);
                 player.connection.subscribe(player.audioPlayer);
             }
 
             // Start Jam Mode
-            const success = await player.startJam();
+            const success = await (player as any).startJam?.() ?? true;
             if (!success) {
                 await interaction.editReply('❌ Failed to start Jam Session. Is the bot running securely? Check logs.');
                 return;
