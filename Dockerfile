@@ -4,8 +4,12 @@ FROM node:22-slim AS builder
 
 WORKDIR /app
 
-# Install build tools for native npm modules and cargo for librespot
-RUN apt-get update && apt-get install -y python3 make g++ gcc curl ca-certificates cargo libasound2-dev pkg-config && rm -rf /var/lib/apt/lists/*
+# Install build tools for native npm modules and dependencies
+RUN apt-get update && apt-get install -y python3 make g++ gcc curl ca-certificates libasound2-dev pkg-config && rm -rf /var/lib/apt/lists/*
+
+# Install latest Rust toolchain via rustup (supports Rust 2024 edition for librespot)
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+ENV PATH="/root/.cargo/bin:${PATH}"
 
 # Build librespot from source via Cargo
 RUN cargo install librespot
