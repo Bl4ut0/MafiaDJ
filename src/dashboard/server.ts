@@ -10,11 +10,13 @@ import PlayerManager from '../player/PlayerManager';
 import { config } from '../config';
 import { logger } from '../utils/logger';
 
-// pkg-safe path to the public folder
-const isPkg = (process as any).pkg;
-const publicDir = isPkg
-    ? path.join(__dirname, '../../src/dashboard/public')   // virtual snapshot path
-    : path.join(__dirname, 'public');
+import fs from 'fs';
+
+// Safely locate static public directory
+let publicDir = path.join(__dirname, 'public');
+if (!fs.existsSync(path.join(publicDir, 'index.html'))) {
+    publicDir = path.join(__dirname, '../../src/dashboard/public');
+}
 
 const PORT = parseInt(process.env.PORT || process.env.DASHBOARD_PORT || '3000');
 const SESSION_SECRET = process.env.DASHBOARD_SESSION_SECRET || 'mafiadj-change-me';

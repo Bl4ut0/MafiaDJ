@@ -50,6 +50,7 @@ COPY package*.json ./
 # Copy pre-compiled node_modules, JavaScript dist, and static assets from builder stage
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
+COPY src/dashboard/public ./dist/dashboard/public
 COPY src/dashboard/public ./src/dashboard/public
 
 # Create directories for persistent data & cache
