@@ -16,7 +16,7 @@ const publicDir = isPkg
     ? path.join(__dirname, '../../src/dashboard/public')   // virtual snapshot path
     : path.join(__dirname, 'public');
 
-const PORT = parseInt(process.env.DASHBOARD_PORT || '3001');
+const PORT = parseInt(process.env.PORT || process.env.DASHBOARD_PORT || '3000');
 const SESSION_SECRET = process.env.DASHBOARD_SESSION_SECRET || 'mafiadj-change-me';
 
 const sessionMiddleware = session({

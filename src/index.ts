@@ -5,6 +5,7 @@ import { Events } from 'discord.js';
 import { loadCommands } from './commands';
 import { handleInteraction } from './events/interactionCreate';
 import { logger } from './utils/logger';
+import { startDashboard } from './dashboard/server';
 
 async function main() {
     try {
@@ -12,6 +13,9 @@ async function main() {
 
         // Initialize Database
         initDatabase();
+
+        // Start Web Dashboard Server
+        startDashboard();
 
         // Load Commands
         await loadCommands();
