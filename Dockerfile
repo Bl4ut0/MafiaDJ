@@ -1,11 +1,14 @@
 # Multi-stage build for MafiaDJ
-# Stage 1: Build TypeScript
+# Stage 1: Build TypeScript & librespot
 FROM node:22-slim AS builder
 
 WORKDIR /app
 
-# Install build tools for native npm modules (e.g. better-sqlite3)
-RUN apt-get update && apt-get install -y python3 make g++ gcc curl ca-certificates && rm -rf /var/lib/apt/lists/*
+# Install build tools for native npm modules and cargo for librespot
+RUN apt-get update && apt-get install -y python3 make g++ gcc curl ca-certificates cargo libasound2-dev pkg-config && rm -rf /var/lib/apt/lists/*
+
+# Install librespot binary via cargo
+RUN cargo install librespot --root /tmp/cargo || true
 
 COPY package*.json tsconfig.json ./
 RUN npm install
@@ -34,9 +37,8 @@ RUN apt-get update && apt-get install -y \
 RUN curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp \
     && chmod a+rx /usr/local/bin/yt-dlp
 
-# Install librespot binary (v0.8.0 release for linux x86_64)
-RUN curl -L https://github.com/librespot-org/librespot/releases/download/v0.8.0/librespot-v0.8.0-linux-x86_64.tar.gz | tar -xz -C /usr/local/bin/ \
-    && chmod +x /usr/local/bin/librespot || true
+# Copy librespot binary from builder stage
+COPY --from=builder /tmp/cargo/bin/librespot /usr/local/bin/librespot
 
 COPY package*.json ./
 

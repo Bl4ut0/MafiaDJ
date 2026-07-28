@@ -32,7 +32,7 @@ export const command = {
                 player.connection = joinVoiceChannel({
                     channelId: voiceChannel.id,
                     guildId: voiceChannel.guild.id,
-                    adapterCreator: voiceChannel.guild.voiceAdapterCreator,
+                    adapterCreator: voiceChannel.guild.voiceAdapterCreator as any,
                 });
                 player.connection.subscribe(player.audioPlayer);
             }
