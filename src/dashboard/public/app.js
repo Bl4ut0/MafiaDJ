@@ -293,6 +293,9 @@ async function init() {
             loadChannels();
         }
 
+        // Check YouTube Auth Status
+        checkYouTubeAuthStatus();
+
     } catch (err) {
         console.error('[MafiaDJ] Init error:', err);
     }
@@ -377,6 +380,83 @@ async function toggleSpotifyPlayback(enabled) {
             if (togglePlayback) togglePlayback.checked = !enabled;
         }
     } catch (err) { console.error(err); }
+}
+
+// ── YouTube Auth Handlers ──────────────────────────────────────────────────
+let ytPollTimer = null;
+
+async function checkYouTubeAuthStatus() {
+    try {
+        const res = await fetch('/api/youtube/status');
+        const data = await res.json();
+        const btn = document.getElementById('btn-yt-connect');
+        const desc = document.getElementById('yt-auth-desc');
+        
+        if (data.authenticated) {
+            if (btn) { btn.textContent = '✓ Connected'; btn.style.background = 'var(--green)'; btn.disabled = true; }
+            if (desc) desc.textContent = 'YouTube Account Active (Authenticated via Google)';
+        } else {
+            if (btn) { btn.textContent = 'Connect Account'; btn.style.background = ''; btn.disabled = false; }
+            if (desc) desc.textContent = 'Authenticate with Google to bypass YouTube bot restrictions.';
+        }
+    } catch {}
+}
+
+async function startYouTubeAuth() {
+    if (!user || user.role !== 'admin') {
+        showToast("🔒 Admin role required");
+        return;
+    }
+    try {
+        const res = await fetch('/api/youtube/auth/init', { method: 'POST' });
+        const data = await res.json();
+        if (!res.ok) {
+            alert(data.error || 'Failed to start authentication');
+            return;
+        }
+
+        document.getElementById('yt-user-code').textContent = data.user_code;
+        const verifyLink = document.getElementById('yt-verify-link');
+        verifyLink.href = data.verification_url;
+
+        document.getElementById('yt-auth-modal').classList.remove('hidden');
+        document.getElementById('yt-auth-status').textContent = 'Waiting for Google authorization...';
+
+        // Start polling
+        clearInterval(ytPollTimer);
+        const intervalMs = (data.interval || 5) * 1000;
+        ytPollTimer = setInterval(() => pollYouTubeAuth(data.device_code), intervalMs);
+
+    } catch (err) {
+        alert('Could not start YouTube authentication.');
+    }
+}
+
+async function pollYouTubeAuth(deviceCode) {
+    try {
+        const res = await fetch('/api/youtube/auth/poll', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ deviceCode })
+        });
+        const data = await res.json();
+
+        if (data.status === 'complete') {
+            clearInterval(ytPollTimer);
+            document.getElementById('yt-auth-status').textContent = '✅ Connected successfully!';
+            showToast('YouTube Account Connected!');
+            setTimeout(closeYtAuthModal, 1500);
+            checkYouTubeAuthStatus();
+        } else if (data.status === 'expired' || data.status === 'error') {
+            clearInterval(ytPollTimer);
+            document.getElementById('yt-auth-status').textContent = '❌ Authorization expired or failed.';
+        }
+    } catch {}
+}
+
+function closeYtAuthModal() {
+    clearInterval(ytPollTimer);
+    document.getElementById('yt-auth-modal').classList.add('hidden');
 }
 
 // ── Controls ────────────────────────────────────────────────────────────────

@@ -435,3 +435,35 @@ apiRouter.post('/playlists/:id/add', requireAuth, (req: Request, res: Response) 
         res.status(500).json({ error: 'Failed to add track' });
     }
 });
+
+// ─── YouTube Google Account Authentication ──────────────────────────────
+import { isYouTubeAuthenticated, initYouTubeDeviceAuth, pollYouTubeDeviceAuth } from '../sources/youtubeAuth';
+
+// GET /api/youtube/status
+apiRouter.get('/youtube/status', requireAuth, (_req: Request, res: Response) => {
+    res.json({ authenticated: isYouTubeAuthenticated() });
+});
+
+// POST /api/youtube/auth/init (Admin only)
+apiRouter.post('/youtube/auth/init', requireAdmin, async (_req: Request, res: Response) => {
+    try {
+        const data = await initYouTubeDeviceAuth();
+        res.json(data);
+    } catch (err: any) {
+        logger.error('[Dashboard API] YouTube auth init error:', err);
+        res.status(500).json({ error: err?.message || 'Failed to start YouTube authentication' });
+    }
+});
+
+// POST /api/youtube/auth/poll { deviceCode } (Admin only)
+apiRouter.post('/youtube/auth/poll', requireAdmin, async (req: Request, res: Response) => {
+    try {
+        const { deviceCode } = req.body;
+        if (!deviceCode) return res.status(400).json({ error: 'Missing deviceCode' });
+        const result = await pollYouTubeDeviceAuth(deviceCode);
+        res.json(result);
+    } catch (err: any) {
+        logger.error('[Dashboard API] YouTube auth poll error:', err);
+        res.status(500).json({ error: 'Poll failed' });
+    }
+});

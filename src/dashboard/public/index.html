@@ -204,6 +204,16 @@
             </label>
           </div>
 
+          <h3 style="margin: 24px 0 16px 0; font-size: 16px; color: var(--text);">Account Integrations</h3>
+          
+          <div class="setting-row">
+            <div class="setting-info">
+              <div class="setting-title">YouTube Account Sign-In</div>
+              <div class="setting-desc" id="yt-auth-desc">Authenticate with Google to bypass YouTube bot restrictions.</div>
+            </div>
+            <button class="search-btn" id="btn-yt-connect" onclick="startYouTubeAuth()">Connect Account</button>
+          </div>
+
           <h3 style="margin: 24px 0 16px 0; font-size: 16px; color: var(--text);">Admin Actions</h3>
           
           <div class="setting-row">
@@ -226,6 +236,30 @@
       </div>
 
     </aside>
+  </div>
+</div>
+
+<!-- ── YouTube Auth Modal ── -->
+<div id="yt-auth-modal" class="modal-overlay hidden">
+  <div class="modal-content" style="max-width: 440px; text-align: center; padding: 24px;">
+    <h3 style="margin-bottom: 12px; font-size: 18px; color: var(--text);">Sign In to YouTube</h3>
+    <p style="font-size: 14px; color: var(--text-sub); margin-bottom: 20px;">
+      To authenticate, open Google's device login link below and enter this code:
+    </p>
+    
+    <div id="yt-user-code" style="font-size: 28px; font-weight: 700; letter-spacing: 4px; color: var(--accent); background: var(--surface); padding: 12px; border-radius: 8px; margin-bottom: 20px; font-family: monospace;">
+      ----
+    </div>
+    
+    <div style="display: flex; gap: 12px; justify-content: center;">
+      <a id="yt-verify-link" href="#" target="_blank" class="search-btn" style="text-decoration: none; display: inline-flex; align-items: center; justify-content: center;">
+        Open Google Sign-In ➔
+      </a>
+      <button class="btn-back" onclick="closeYtAuthModal()">Cancel</button>
+    </div>
+    <div id="yt-auth-status" style="margin-top: 16px; font-size: 13px; color: var(--text-muted);">
+      Waiting for authorization...
+    </div>
   </div>
 </div>
 
