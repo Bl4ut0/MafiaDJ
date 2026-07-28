@@ -150,15 +150,24 @@ function applyState(s) {
     renderQueue(s.queue);
 
     // Server info
+    const topbarServer = document.getElementById('topbar-server');
     const serverNameEl = document.getElementById('server-name');
-    if (s.serverName && s.serverName !== 'MafiaDJ') {
-        serverNameEl.textContent = s.serverName;
-    } else {
-        serverNameEl.textContent = '';
-    }
-    if (s.serverIcon) {
-        const icon = document.getElementById('server-icon');
-        icon.src = s.serverIcon; icon.style.display = 'inline-block';
+    const serverIconEl = document.getElementById('server-icon');
+
+    if (s.serverName || s.serverIcon) {
+        if (topbarServer) topbarServer.style.display = 'flex';
+        if (s.serverName && serverNameEl) {
+            serverNameEl.textContent = s.serverName;
+            serverNameEl.style.display = 'inline';
+        }
+        if (s.serverIcon && serverIconEl) {
+            serverIconEl.src = s.serverIcon;
+            serverIconEl.style.display = 'block';
+        } else if (serverIconEl) {
+            serverIconEl.style.display = 'none';
+        }
+    } else if (topbarServer) {
+        topbarServer.style.display = 'none';
     }
 
     // Sync settings toggles
@@ -384,11 +393,14 @@ async function toggleSpotifyPlayback(enabled) {
 
 // ── YouTube Auth Handlers ──────────────────────────────────────────────────
 let ytPollTimer = null;
+window.isYtAuthenticated = false;
 
 async function checkYouTubeAuthStatus() {
     try {
         const res = await fetch('/api/youtube/status');
         const data = await res.json();
+        window.isYtAuthenticated = !!data.authenticated;
+        
         const btn = document.getElementById('btn-yt-connect');
         const desc = document.getElementById('yt-auth-desc');
         
@@ -459,6 +471,12 @@ function closeYtAuthModal() {
     document.getElementById('yt-auth-modal').classList.add('hidden');
 }
 
+// Explicitly export to global window scope so inline onclick handler works
+window.startYouTubeAuth = startYouTubeAuth;
+window.pollYouTubeAuth = pollYouTubeAuth;
+window.closeYtAuthModal = closeYtAuthModal;
+window.checkYouTubeAuthStatus = checkYouTubeAuthStatus;
+
 // ── Controls ────────────────────────────────────────────────────────────────
 async function apiPost(endpoint, body = {}) {
     if (!isDJ) return;
@@ -470,7 +488,17 @@ async function apiPost(endpoint, body = {}) {
         });
         if (!res.ok) {
             const data = await res.json().catch(() => ({}));
-            if (data.error) alert(data.error);
+            if (data.error) {
+                if (data.error.includes('Sign in') || data.error.includes('bot') || data.error.includes('yt-dlp')) {
+                    if (!window.isYtAuthenticated && typeof window.startYouTubeAuth === 'function') {
+                        if (confirm('YouTube authentication is required to play this track. Open Google Sign-In now?')) {
+                            window.startYouTubeAuth();
+                            return;
+                        }
+                    }
+                }
+                alert(data.error);
+            }
         }
     } catch (err) { console.error(err); }
 }
@@ -735,6 +763,13 @@ function showToast(msg) {
         toast.remove();
     }, 3000);
 }
+
+// Export all onclick handlers to global window scope
+window.addToQueue = addToQueue;
+window.openSearchModal = openSearchModal;
+window.createPlaylist = createPlaylist;
+window.openPlaylist = openPlaylist;
+window.playPlaylist = playPlaylist;
 
 // ── Boot ─────────────────────────────────────────────────────────────────────
 init();

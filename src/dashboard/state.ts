@@ -41,7 +41,7 @@ function resolveRequesterName(requesterId: string): string {
 
 export function buildState(): DashboardState {
     const player = PlayerManager.getPlayer(config.guildId);
-    const guild = client.guilds.cache.get(config.guildId);
+    const guild = client.guilds.cache.get(config.guildId) || client.guilds.cache.first();
 
     const mapTrack = (t: any): DashboardTrack => ({
         title: t.title ?? 'Unknown',
@@ -63,8 +63,8 @@ export function buildState(): DashboardState {
         spotifyAutoplay: player.spotifyAutoplay,
         elapsedSeconds: player.getElapsedSeconds(),
         isConnected: !!player.connection,
-        serverName: guild?.name ?? 'MafiaDJ',
-        serverIcon: guild?.iconURL({ size: 64 }) ?? null,
+        serverName: guild?.name ?? '',
+        serverIcon: guild?.iconURL({ extension: 'png', size: 64 }) ?? null,
         spotifyEnabled: !!process.env.SPOTIFY_CLIENT_ID && !!process.env.SPOTIFY_CLIENT_SECRET,
         spotifyPlaybackEnabled: (player as any).spotifyPlaybackEnabled ?? true,
     };
