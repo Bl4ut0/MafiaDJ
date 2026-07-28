@@ -33,6 +33,19 @@ async function main() {
             logger.error(error);
         });
 
+        // Graceful Shutdown Signals
+        process.on('SIGTERM', () => {
+            logger.info('Received SIGTERM. Shutting down gracefully...');
+            client.destroy();
+            process.exit(0);
+        });
+
+        process.on('SIGINT', () => {
+            logger.info('Received SIGINT. Shutting down gracefully...');
+            client.destroy();
+            process.exit(0);
+        });
+
         // Login to Discord
         await client.login(config.discordToken);
 
