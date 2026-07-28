@@ -25,6 +25,9 @@ export const config: BotConfig = {
     spotifyClientSecret: process.env.SPOTIFY_CLIENT_SECRET || '',
     spotifyUsername: process.env.SPOTIFY_USERNAME,
     spotifyPassword: process.env.SPOTIFY_PASSWORD,
+    bot: {
+        logLevel: process.env.LOG_LEVEL || 'info'
+    },
     ...fileConfig
 };
 
