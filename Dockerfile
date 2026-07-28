@@ -5,7 +5,7 @@ FROM node:22-slim AS builder
 WORKDIR /app
 
 # Install build tools for native npm modules and dependencies
-RUN apt-get update && apt-get install -y python3 make g++ gcc curl ca-certificates libasound2-dev pkg-config && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y python3 make g++ gcc curl ca-certificates libasound2-dev pkg-config libssl-dev && rm -rf /var/lib/apt/lists/*
 
 # Install latest Rust toolchain via rustup (supports Rust 2024 edition for librespot)
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
@@ -26,7 +26,7 @@ FROM node:22-slim AS runner
 
 WORKDIR /app
 
-# Install runtime dependencies: ffmpeg, python3, curl, ca-certificates, wget, tar, libasound2
+# Install runtime dependencies: ffmpeg, python3, curl, ca-certificates, wget, tar, libasound2, libssl3
 RUN apt-get update && apt-get install -y \
     ffmpeg \
     python3 \
@@ -35,6 +35,7 @@ RUN apt-get update && apt-get install -y \
     wget \
     tar \
     libasound2 \
+    libssl3 \
     && rm -rf /var/lib/apt/lists/*
 
 # Install yt-dlp binary
