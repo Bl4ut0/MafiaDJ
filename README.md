@@ -32,110 +32,84 @@ This bot utilizes `librespot` to interface with Spotify's servers. This library 
 
 ## 🚀 Installation & Setup
 
-### Option A: Windows (Standalone Executable)
+### Option A: Docker / Dockge Deployment (Recommended)
 
-We provide a self-contained build script that packages everything you need.
+The recommended production setup is via **Docker Compose** or **Dockge**.
 
-1.  **Clone the Repository**:
-    ```bash
-    git clone <your-repo-url>
-    cd MafiaDJ
-    ```
-2.  **Install Dependencies**:
-    ```bash
-    npm install
-    ```
-3.  **Build the Executable**:
-    Run the PowerShell build script:
-    ```powershell
-    .\scripts\build-windows.ps1
-    ```
-    This will create a `release/` folder containing `mafiadj.exe` and necessary config files.
+1. **Pull and Deploy via `docker-compose.yml`**:
+   ```yaml
+   version: '3.8'
 
-4.  **Configure**:
-    - Navigate to the `release/` folder.
-    - Rename `.env.example` to `.env` and fill in your **Discord Bot Token**, **Spotify Credentials**, etc.
-    - (Optional) Edit `config.json` to customize bot behavior.
+   services:
+     mafiadj:
+       image: bl4ut0/mafiadj:latest
+       container_name: mafiadj
+       restart: unless-stopped
+       ports:
+         - "3001:3000"  # Access Web Companion at http://your-server-ip:3001
+       env_file:
+         - .env
+       volumes:
+         - ./data:/app/data
+         - ./spotify_cache:/app/spotify_cache
+   ```
 
-5.  **Run**:
-    Double-click `mafiadj.exe` or run it from the terminal.
+2. **Environment File (`.env`)**:
+   ```env
+   # Discord Configuration
+   DISCORD_TOKEN=your_bot_token
+   DISCORD_CLIENT_ID=your_client_id
+   GUILD_ID=your_guild_id
 
-### Option B: Linux (Debian/Ubuntu)
+   # Spotify Configuration (Web API)
+   SPOTIFY_CLIENT_ID=your_spotify_client_id
+   SPOTIFY_CLIENT_SECRET=your_spotify_client_secret
+   SPOTIFY_REFRESH_TOKEN=your_spotify_refresh_token
 
-Use the automated setup script to provision a server (e.g., a VPS or Proxmox container).
+   # Web Dashboard Configuration
+   DASHBOARD_ENABLED=true
+   DASHBOARD_PORT=3000
+   DASHBOARD_SESSION_SECRET=a_long_random_secret_string
+   DISCORD_CLIENT_SECRET=your_discord_client_secret
+   DASHBOARD_REDIRECT_URI=http://your-server-ip:3001/auth/callback
 
-1.  **Clone the Repository**:
-    ```bash
-    git clone <your-repo-url>
-    cd MafiaDJ
-    ```
-2.  **Run Setup Script**:
-    ```bash
-    sudo bash scripts/setup.sh
-    ```
-    This script will:
-    - Install system dependencies (Node.js 20, FFmpeg, Python/yt-dlp, Rust/Librespot).
-    - Set up a `mafiadj` system user.
-    - Install the bot as a systemd service (`systemctl start mafiadj`).
+   # Executable Paths (Docker)
+   YTDLP_PATH=yt-dlp
+   FFMPEG_PATH=ffmpeg
+   LIBRESPOT_PATH=librespot
 
-### Option C: Manual / Source
+   LOG_LEVEL=info
+   ```
 
-1.  **Prerequisites**:
-    - Node.js 20+
-    - FFmpeg (added to System PATH)
-    - Rust (if building librespot from source) OR a pre-built `librespot` binary.
-
-2.  **Install**:
-    ```bash
-    npm install
-    npm run build
-    ```
-
-3.  **Configure**:
-    - Copy `.env.example` to `.env` and configure it.
-
-4.  **Run**:
-    ```bash
-    npm start
-    ```
+3. **Start the Container**:
+   ```bash
+   docker compose pull
+   docker compose up -d
+   ```
 
 ---
 
 ## 🎮 Usage Guide
 
-### text Commands (Slash Commands)
+### Discord Slash Commands
+
+Slash commands are **automatically registered** with Discord API on bot startup.
 
 - **/setup**: Initialize the persistent controller channel (Admin only).
-- **/play <query|url>**: Add a song or playlist to the queue.
+- **/play <query|url>**: Add a song or playlist to the queue (YouTube, Spotify, SoundCloud).
 - **/search <query>**: Search YouTube and select a track.
-- **/library**: Open your personal music library in DMs.
+- **/library**: Open your personal music library in Discord DMs.
 - **/favorites play**: Quick-play all your liked songs.
 - **/queue**: View the current queue.
 
-### Controller Buttons
+### Web Companion Dashboard (`http://your-server-ip:3001`)
 
-- ⏯️ **Pause/Resume**: Toggle playback.
-- ⏭️ **Skip**: Vote to skip (or force skip if DJ).
-- ⏹️ **Stop**: Vote to stop (or force stop if DJ).
-- ❤️ **Like**: Add current track to your Favorites.
-- 🔀 **Shuffle**: Shuffle the current queue.
-- 🔁 **Loop**: Cycle between Off, Track, and Queue loop modes.
+- **Live Player Controls**: Real-time track progress, play/pause, skip, volume control, and shuffle.
+- **Universal Search**: Search YouTube & Spotify directly from the browser and queue tracks with one click.
+- **Favorites & Playlists**: Manage your personal library and server playlists with instant sync to Discord.
+- **Discord OAuth2 Login**: Secure role-based login matching your server permissions.
 
 ---
-
-## 🛠️ Configuration (`.env`)
-
-```env
-DISCORD_TOKEN=your_bot_token
-DISCORD_CLIENT_ID=your_client_id
-GUILD_ID=your_server_id
-
-# Spotify (Required for Spotify playback)
-SPOTIFY_CLIENT_ID=your_spotify_client_id
-SPOTIFY_CLIENT_SECRET=your_spotify_client_secret
-SPOTIFY_USERNAME=your_spotify_username
-SPOTIFY_PASSWORD=your_spotify_password
-```
 
 ## 📝 License
 

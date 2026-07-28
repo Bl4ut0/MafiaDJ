@@ -8,7 +8,7 @@ export const commands = new Collection<string, Command>();
 
 export async function loadCommands() {
     const commandsPath = path.join(__dirname);
-    const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.ts') && file !== 'index.ts');
+    const commandFiles = fs.readdirSync(commandsPath).filter(file => (file.endsWith('.js') || file.endsWith('.ts')) && !file.startsWith('index.') && !file.endsWith('.d.ts'));
 
     for (const file of commandFiles) {
         const filePath = path.join(commandsPath, file);

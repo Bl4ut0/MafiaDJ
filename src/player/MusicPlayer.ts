@@ -1,4 +1,4 @@
-import { AudioPlayer, AudioPlayerStatus, createAudioPlayer, createAudioResource, VoiceConnection, NoSubscriberBehavior } from '@discordjs/voice';
+import { AudioPlayer, AudioPlayerStatus, createAudioPlayer, createAudioResource, VoiceConnection, NoSubscriberBehavior, StreamType } from '@discordjs/voice';
 import { Queue } from './Queue';
 import { QueueItem } from '../types';
 import { EventEmitter } from 'events';
@@ -81,6 +81,7 @@ export class MusicPlayer extends EventEmitter {
             }
 
             const resource = createAudioResource(stream, {
+                inputType: StreamType.Raw,
                 inlineVolume: true
             });
 
