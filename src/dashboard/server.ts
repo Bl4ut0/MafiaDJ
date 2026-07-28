@@ -1,6 +1,6 @@
 import express from 'express';
 import session from 'express-session';
-import { createServer } from 'http';
+import { createServer, ServerResponse } from 'http';
 import { WebSocketServer, WebSocket } from 'ws';
 import path from 'path';
 import { authRouter } from './auth';
@@ -19,18 +19,6 @@ if (!fs.existsSync(path.join(publicDir, 'index.html'))) {
 }
 
 const PORT = parseInt(process.env.PORT || process.env.DASHBOARD_PORT || '3000');
-const SESSION_SECRET = process.env.DASHBOARD_SESSION_SECRET || 'mafiadj-change-me';
-
-const sessionMiddleware = session({
-    secret: SESSION_SECRET,
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-        secure: false,  // set true behind HTTPS proxy in production
-        httpOnly: true,
-        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-    },
-});
 
 let wss: WebSocketServer;
 
@@ -78,12 +66,43 @@ export function startDashboard() {
         return;
     }
 
+    const sessionSecret = process.env.DASHBOARD_SESSION_SECRET;
+    if (!sessionSecret || sessionSecret.length < 32) {
+        logger.error('[Dashboard] DASHBOARD_SESSION_SECRET must be set to at least 32 characters. Dashboard disabled.');
+        return;
+    }
+
     const app = express();
     const server = createServer(app);
+    const secureCookies = process.env.DASHBOARD_COOKIE_SECURE === 'true';
+
+    if (process.env.DASHBOARD_TRUST_PROXY === 'true') {
+        app.set('trust proxy', 1);
+    }
+
+    const sessionMiddleware = session({
+        name: 'mafiadj.sid',
+        secret: sessionSecret,
+        resave: false,
+        saveUninitialized: false,
+        cookie: {
+            secure: secureCookies,
+            httpOnly: true,
+            sameSite: 'lax',
+            maxAge: 24 * 60 * 60 * 1000,
+        },
+    });
 
     // Middleware
     app.use(sessionMiddleware);
-    app.use(express.json());
+    app.use(express.json({ limit: '256kb' }));
+    app.use((_req, res, next) => {
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        res.setHeader('X-Frame-Options', 'DENY');
+        res.setHeader('Referrer-Policy', 'same-origin');
+        res.setHeader('Cache-Control', 'no-store');
+        next();
+    });
 
     // Static files (public folder)
     app.use(express.static(publicDir));
@@ -98,7 +117,26 @@ export function startDashboard() {
     });
 
     // WebSocket server — attached to the HTTP server
-    wss = new WebSocketServer({ server, path: '/ws' });
+    wss = new WebSocketServer({ noServer: true });
+
+    server.on('upgrade', (request, socket, head) => {
+        if (request.url !== '/ws') {
+            socket.destroy();
+            return;
+        }
+
+        const sessionResponse = new ServerResponse(request);
+        sessionMiddleware(request as any, sessionResponse as any, (err) => {
+            if (err || !(request as any).session?.userId) {
+                socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
+                socket.destroy();
+                return;
+            }
+            wss.handleUpgrade(request, socket, head, ws => {
+                wss.emit('connection', ws, request);
+            });
+        });
+    });
 
     wss.on('connection', (ws) => {
         // Send current state immediately on connect

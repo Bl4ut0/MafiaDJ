@@ -1,7 +1,8 @@
 import { Router, Request, Response } from 'express';
 import { config } from '../config';
-import db from '../database/Database';
 import { logger } from '../utils/logger';
+import crypto from 'crypto';
+import { getDashboardRole } from './roles';
 
 export const authRouter = Router();
 
@@ -9,12 +10,15 @@ const DISCORD_API = 'https://discord.com/api/v10';
 const OAUTH_SCOPES = 'identify guilds.members.read';
 
 // GET /auth/login — redirect to Discord OAuth2
-authRouter.get('/login', (_req: Request, res: Response) => {
+authRouter.get('/login', (req: Request, res: Response) => {
+    const state = crypto.randomBytes(32).toString('hex');
+    (req.session as any).oauthState = state;
     const params = new URLSearchParams({
         client_id: config.discordClientId,
-        redirect_uri: process.env.DASHBOARD_REDIRECT_URI || `http://localhost:${process.env.DASHBOARD_PORT || 3001}/auth/callback`,
+        redirect_uri: process.env.DASHBOARD_REDIRECT_URI || `http://localhost:${process.env.PORT || process.env.DASHBOARD_PORT || 3000}/auth/callback`,
         response_type: 'code',
         scope: OAUTH_SCOPES,
+        state,
     });
     res.redirect(`https://discord.com/oauth2/authorize?${params}`);
 });
@@ -22,7 +26,12 @@ authRouter.get('/login', (_req: Request, res: Response) => {
 // GET /auth/callback — exchange code, verify guild membership, store session
 authRouter.get('/callback', async (req: Request, res: Response) => {
     const code = req.query.code as string;
-    if (!code) return res.redirect('/auth/error?msg=No+code+returned');
+    const state = req.query.state as string;
+    const session = req.session as any;
+    if (!code || !state || !session.oauthState || state !== session.oauthState) {
+        return res.redirect('/auth/error?msg=Invalid+login+state');
+    }
+    delete session.oauthState;
 
     try {
         // 1. Exchange code for access token
@@ -34,7 +43,7 @@ authRouter.get('/callback', async (req: Request, res: Response) => {
                 client_secret: process.env.DISCORD_CLIENT_SECRET || '',
                 grant_type: 'authorization_code',
                 code,
-                redirect_uri: process.env.DASHBOARD_REDIRECT_URI || `http://localhost:${process.env.DASHBOARD_PORT || 3001}/auth/callback`,
+                redirect_uri: process.env.DASHBOARD_REDIRECT_URI || `http://localhost:${process.env.PORT || process.env.DASHBOARD_PORT || 3000}/auth/callback`,
             }),
         });
 
@@ -64,31 +73,17 @@ authRouter.get('/callback', async (req: Request, res: Response) => {
         }
         const member: any = await memberRes.json();
 
-        // 4. Determine role (check DJ role from DB, admin via manage_guild perm bit)
-        let role: 'admin' | 'dj' | 'everyone' = 'everyone';
-        const settings = db.prepare('SELECT dj_role_id FROM server_settings WHERE guild_id = ?').get(config.guildId) as any;
-        const djRoleId = settings?.dj_role_id;
-        const memberRoles: string[] = member.roles ?? [];
-
-        // Check for admin: bit 0x20 (MANAGE_GUILD) in permissions string
-        const permsBigInt = BigInt(member.permissions ?? '0');
-        const hasManageGuild = (permsBigInt & BigInt(0x20)) === BigInt(0x20);
-        const hasAdminPerm = (permsBigInt & BigInt(0x8)) === BigInt(0x8);
-
-        if (hasManageGuild || hasAdminPerm) {
-            role = 'admin';
-        } else if (djRoleId && memberRoles.includes(djRoleId)) {
-            role = 'dj';
-        }
+        // 4. Resolve permissions from the connected bot's guild member object.
+        // OAuth's Guild Member response does not contain computed permissions.
+        const role = await getDashboardRole(user.id);
 
         // 5. Store in session
-        const session = req.session as any;
         session.userId = user.id;
         session.username = user.username;
         session.discriminator = user.discriminator;
         session.avatar = user.avatar;
         session.role = role;
-        session.accessToken = accessToken;
+        session.lastRoleCheck = Date.now();
 
         logger.info(`[Dashboard] Login: ${user.username} (${user.id}) role=${role}`);
         res.redirect('/');

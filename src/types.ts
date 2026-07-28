@@ -9,7 +9,7 @@ export interface BotConfig {
     spotifyPassword?: string;
     spotifyRefreshToken?: string;
     bot?: { logLevel?: string };
-    playback?: { defaultVolume?: number };
+    playback?: { defaultVolume?: number; maxQueueLength?: number; maxDurationSeconds?: number };
     permissions?: { voteSkipThreshold?: number; voteStopThreshold?: number };
     paths?: { ytdlp?: string; ffmpeg?: string; librespot?: string };
     [key: string]: any;

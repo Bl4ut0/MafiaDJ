@@ -15,7 +15,7 @@ ENV PATH="/root/.cargo/bin:${PATH}"
 RUN cargo install librespot --locked
 
 COPY package*.json tsconfig.json ./
-RUN npm install
+RUN npm ci
 
 COPY src ./src
 RUN npm run build
@@ -46,6 +46,7 @@ RUN curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o 
 COPY --from=builder /root/.cargo/bin/librespot /usr/local/bin/librespot
 
 COPY package*.json ./
+COPY config.json ./config.json
 
 # Copy pre-compiled node_modules, JavaScript dist, and static assets from builder stage
 COPY --from=builder /app/node_modules ./node_modules

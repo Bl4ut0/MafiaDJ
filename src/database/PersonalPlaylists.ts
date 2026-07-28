@@ -24,8 +24,16 @@ export class PersonalPlaylists {
     }
 
     // Track Management
-    public static addTrack(playlistId: number, favoriteId: number): boolean {
+    public static addTrack(playlistId: number, favoriteId: number, userId: string): boolean {
         try {
+            const owned = db.prepare(`
+                SELECT 1
+                FROM personal_playlists p
+                JOIN favorites f ON f.id = ? AND f.user_id = ?
+                WHERE p.id = ? AND p.user_id = ?
+            `).get(favoriteId, userId, playlistId, userId);
+            if (!owned) return false;
+
             // Get max position
             const maxPos = db.prepare('SELECT MAX(position) as pos FROM personal_playlist_tracks WHERE playlist_id = ?').get(playlistId) as any;
             const position = (maxPos.pos || 0) + 1;
@@ -45,15 +53,16 @@ export class PersonalPlaylists {
         return result.changes > 0;
     }
 
-    public static getTracks(playlistId: number) {
+    public static getTracks(playlistId: number, userId: string) {
         // Join with favorites to get track details
         const stmt = db.prepare(`
             SELECT f.*, ppt.position 
             FROM personal_playlist_tracks ppt
             JOIN favorites f ON ppt.favorite_id = f.id
-            WHERE ppt.playlist_id = ?
+            JOIN personal_playlists p ON ppt.playlist_id = p.id
+            WHERE ppt.playlist_id = ? AND p.user_id = ? AND f.user_id = ?
             ORDER BY ppt.position ASC
         `);
-        return stmt.all(playlistId) as any[];
+        return stmt.all(playlistId, userId, userId) as any[];
     }
 }

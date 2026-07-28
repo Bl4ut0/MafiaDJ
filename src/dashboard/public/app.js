@@ -43,8 +43,11 @@ function applyState(s) {
     state = s;
 
     // Background blur
-    if (s.currentTrack?.thumbnail) {
-        document.getElementById('bg-blur').style.backgroundImage = `url('${s.currentTrack.thumbnail}')`;
+    const backgroundImage = getSafeImageUrl(s.currentTrack?.thumbnail);
+    if (backgroundImage) {
+        document.getElementById('bg-blur').style.backgroundImage = `url("${backgroundImage}")`;
+    } else {
+        document.getElementById('bg-blur').style.backgroundImage = '';
     }
 
     // Jam banner
@@ -222,7 +225,7 @@ function renderQueue(queue) {
     const sourceLabels = { youtube: 'YT', spotify: 'SP', soundcloud: 'SC', direct: '🔗' };
     list.innerHTML = queue.map((t, i) => `
         <div class="queue-item">
-          <img class="queue-thumb" src="${t.thumbnail || ''}" alt="" onerror="this.style.display='none'">
+          <img class="queue-thumb" src="${escAttr(t.thumbnail)}" alt="" onerror="this.style.display='none'">
           <div class="queue-info">
             <div class="queue-title">${escHtml(t.title)}</div>
             <div class="queue-sub">${escHtml(t.artist || '')} • ${fmtTime(t.duration)}</div>
@@ -405,11 +408,11 @@ async function checkYouTubeAuthStatus() {
         const desc = document.getElementById('yt-auth-desc');
         
         if (data.authenticated) {
-            if (btn) { btn.textContent = '✓ Connected'; btn.style.background = 'var(--green)'; btn.disabled = true; }
-            if (desc) desc.textContent = 'YouTube Account Active (Authenticated via Google)';
+            if (btn) { btn.textContent = '✓ Playback cookies loaded'; btn.style.background = 'var(--green)'; btn.disabled = false; }
+            if (desc) desc.textContent = 'Instance playback cookies are present. Only Discord admins can replace them.';
         } else {
-            if (btn) { btn.textContent = 'Connect Account'; btn.style.background = ''; btn.disabled = false; }
-            if (desc) desc.textContent = 'Authenticate with Google to bypass YouTube bot restrictions.';
+            if (btn) { btn.textContent = 'Manage Playback Cookies'; btn.style.background = ''; btn.disabled = false; }
+            if (desc) desc.textContent = 'No instance playback cookies are configured.';
         }
     } catch {}
 }
@@ -515,13 +518,8 @@ function onVolumeChange(val) {
 
 // ── Progress bar click-to-seek ───────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
-    document.getElementById('progress-bar').addEventListener('click', (e) => {
-        if (!isDJ || !state?.currentTrack?.duration) return;
-        const rect = e.currentTarget.getBoundingClientRect();
-        const pct = (e.clientX - rect.left) / rect.width;
-        const seconds = Math.floor(pct * state.currentTrack.duration);
-        apiPost('/api/seek', { seconds });
-    });
+    const progressBar = document.getElementById('progress-bar');
+    if (progressBar) progressBar.title = 'Seeking is not supported for streamed tracks.';
 });
 
 // ── Tabs ────────────────────────────────────────────────────────────────────
@@ -554,12 +552,12 @@ async function loadFavorites() {
         }
         list.innerHTML = data.map(r => `
             <div class="result-item">
-              <img class="result-thumb" src="${r.thumbnail || ''}" alt="" onerror="this.style.display='none'">
-              <div class="result-info" onclick="addToQueue('${escAttr(r.url)}')">
+              <img class="result-thumb" src="${escAttr(r.thumbnail)}" alt="" onerror="this.style.display='none'">
+              <div class="result-info" onclick="addToQueue(${jsArg(r.url)})">
                 <div class="result-title">${escHtml(r.title)}</div>
                 <div class="result-sub">${escHtml(r.artist)}</div>
               </div>
-              <span class="result-add" onclick="addToQueue('${escAttr(r.url)}')">▶</span>
+              <span class="result-add" onclick="addToQueue(${jsArg(r.url)})">▶</span>
             </div>
         `).join('');
     } catch {
@@ -577,7 +575,7 @@ async function loadPlaylists() {
             return;
         }
         list.innerHTML = data.map(p => `
-            <div class="result-item" onclick="openPlaylist(${p.id}, '${escAttr(p.name)}')">
+            <div class="result-item" onclick="openPlaylist(${p.id}, ${jsArg(p.name)})">
               <div class="result-info">
                 <div class="result-title" style="font-size:15px; font-weight:600;">📁 ${escHtml(p.name)}</div>
               </div>
@@ -623,12 +621,12 @@ async function openPlaylist(id, name) {
         }
         list.innerHTML = data.map(r => `
             <div class="result-item">
-              <img class="result-thumb" src="${r.thumbnail || ''}" alt="" onerror="this.style.display='none'">
-              <div class="result-info" onclick="addToQueue('${escAttr(r.url)}')">
+              <img class="result-thumb" src="${escAttr(r.thumbnail)}" alt="" onerror="this.style.display='none'">
+              <div class="result-info" onclick="addToQueue(${jsArg(r.url)})">
                 <div class="result-title">${escHtml(r.title)}</div>
                 <div class="result-sub">${escHtml(r.artist)}</div>
               </div>
-              <span class="result-add" onclick="addToQueue('${escAttr(r.url)}')">▶</span>
+              <span class="result-add" onclick="addToQueue(${jsArg(r.url)})">▶</span>
             </div>
         `).join('');
     } catch {
@@ -703,8 +701,8 @@ async function doGlobalSearch() {
         if (youtubeResults.length > 0) {
             html += `<h3 style="padding: 12px 16px; margin: 0; color: var(--text-sub); font-size: 14px; border-bottom: 1px solid var(--border);">YouTube</h3>`;
             html += youtubeResults.map(r => `
-                <div class="result-item" onclick="addToQueue('${escAttr(r.url)}'); closeSearchModal();">
-                  <img class="result-thumb" src="${r.thumbnail || ''}" alt="" onerror="this.style.display='none'">
+                <div class="result-item" onclick="addToQueue(${jsArg(r.url)}); closeSearchModal();">
+                  <img class="result-thumb" src="${escAttr(r.thumbnail)}" alt="" onerror="this.style.display='none'">
                   <div class="result-info">
                     <div class="result-title">${escHtml(r.title)}</div>
                     <div class="result-sub">${escHtml(r.artist || '')} • ${fmtTime(r.duration)}</div>
@@ -717,8 +715,8 @@ async function doGlobalSearch() {
         if (spotifyResults.length > 0) {
             html += `<h3 style="padding: 12px 16px; margin: 0; color: var(--text-sub); font-size: 14px; border-bottom: 1px solid var(--border); border-top: 4px solid var(--border);">Spotify</h3>`;
             html += spotifyResults.map(r => `
-                <div class="result-item" onclick="addToQueue('${escAttr(r.url)}'); closeSearchModal();">
-                  <img class="result-thumb" src="${r.thumbnail || ''}" alt="" onerror="this.style.display='none'">
+                <div class="result-item" onclick="addToQueue(${jsArg(r.url)}); closeSearchModal();">
+                  <img class="result-thumb" src="${escAttr(r.thumbnail)}" alt="" onerror="this.style.display='none'">
                   <div class="result-info">
                     <div class="result-title">${escHtml(r.title)}</div>
                     <div class="result-sub">${escHtml(r.artist || '')} • ${fmtTime(r.duration)}</div>
@@ -746,7 +744,19 @@ function escHtml(str) {
     return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 function escAttr(str) {
-    return String(str ?? '').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    return String(str ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+function jsArg(value) {
+    return escAttr(JSON.stringify(String(value ?? '')));
+}
+function getSafeImageUrl(value) {
+    if (typeof value !== 'string') return false;
+    try {
+        const url = new URL(value);
+        return url.protocol === 'https:' || url.protocol === 'http:' ? url.href : null;
+    } catch {
+        return null;
+    }
 }
 
 function showToast(msg) {

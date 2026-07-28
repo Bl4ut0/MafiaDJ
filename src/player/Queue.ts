@@ -2,9 +2,16 @@ import { QueueItem } from '../types';
 
 export class Queue {
     private items: QueueItem[] = [];
+    private readonly maxLength: number;
 
-    public enqueue(item: QueueItem): void {
+    constructor(maxLength: number = 200) {
+        this.maxLength = maxLength;
+    }
+
+    public enqueue(item: QueueItem): boolean {
+        if (this.items.length >= this.maxLength) return false;
         this.items.push(item);
+        return true;
     }
 
     public dequeue(): QueueItem | undefined {

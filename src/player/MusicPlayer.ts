@@ -1,10 +1,11 @@
-import { AudioPlayer, AudioPlayerStatus, createAudioPlayer, createAudioResource, VoiceConnection, NoSubscriberBehavior, StreamType } from '@discordjs/voice';
+import { AudioPlayer, AudioPlayerStatus, AudioResource, createAudioPlayer, createAudioResource, VoiceConnection, NoSubscriberBehavior, StreamType } from '@discordjs/voice';
 import { Queue } from './Queue';
 import { QueueItem } from '../types';
 import { EventEmitter } from 'events';
 import { createYtDlpStream } from './AudioStream';
 import { searchYouTube } from '../sources/youtube';
 import { logger } from '../utils/logger';
+import { config } from '../config';
 
 export class MusicPlayer extends EventEmitter {
     public guildId: string;
@@ -20,11 +21,12 @@ export class MusicPlayer extends EventEmitter {
     public playStartTime: number = 0;
     public pauseStartTime: number = 0;
     public totalPausedMs: number = 0;
+    private currentResource: AudioResource | null = null;
 
     constructor(guildId: string = '') {
         super();
         this.guildId = guildId;
-        this.queue = new Queue();
+        this.queue = new Queue(config.playback?.maxQueueLength ?? 200);
         this.audioPlayer = createAudioPlayer({
             behaviors: {
                 noSubscriber: NoSubscriberBehavior.Pause,
@@ -86,6 +88,10 @@ export class MusicPlayer extends EventEmitter {
             });
 
             resource.volume?.setVolume(this.volume / 100);
+            this.currentResource = resource;
+            this.playStartTime = Date.now();
+            this.pauseStartTime = 0;
+            this.totalPausedMs = 0;
 
             this.audioPlayer.play(resource);
             this.emit('trackStart', track);
@@ -113,16 +119,25 @@ export class MusicPlayer extends EventEmitter {
         this.queue.clear();
         this.audioPlayer.stop();
         this.currentTrack = null;
+        this.currentResource = null;
+        this.playStartTime = 0;
+        this.pauseStartTime = 0;
+        this.totalPausedMs = 0;
         this.emit('stateChange');
     }
 
     public pause() {
-        this.audioPlayer.pause();
+        if (this.audioPlayer.pause() && !this.pauseStartTime) {
+            this.pauseStartTime = Date.now();
+        }
         this.emit('stateChange');
     }
 
     public resume() {
-        this.audioPlayer.unpause();
+        if (this.audioPlayer.unpause() && this.pauseStartTime) {
+            this.totalPausedMs += Date.now() - this.pauseStartTime;
+            this.pauseStartTime = 0;
+        }
         this.emit('stateChange');
     }
 
@@ -164,6 +179,7 @@ export class MusicPlayer extends EventEmitter {
 
     public setVolume(volume: number) {
         this.volume = Math.max(0, Math.min(100, volume));
+        this.currentResource?.volume?.setVolume(this.volume / 100);
         this.emit('stateChange');
     }
 }

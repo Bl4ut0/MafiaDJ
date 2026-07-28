@@ -20,6 +20,8 @@ rustup-init.exe
 data/*.db
 data/*.sqlite
 data/*.json
+data/*.txt
+data/cookies.txt
 !data/example.db
 logs/
 *.log

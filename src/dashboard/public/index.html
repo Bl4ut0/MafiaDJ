@@ -107,7 +107,6 @@
 
         <!-- Controls -->
         <div class="controls">
-          <button class="ctrl-btn dj-only" id="btn-prev" title="Previous" onclick="apiPost('/api/skip')">⏮</button>
           <button class="ctrl-btn dj-only" id="btn-loop" title="Loop" onclick="apiPost('/api/loop')">🔁</button>
           <button class="ctrl-btn primary dj-only" id="btn-playpause" title="Pause/Resume" onclick="togglePause()">⏸</button>
           <button class="ctrl-btn dj-only" id="btn-skip" title="Skip" onclick="apiPost('/api/skip')">⏭</button>
@@ -209,9 +208,9 @@
           <div class="setting-row">
             <div class="setting-info">
               <div class="setting-title">YouTube Account Sign-In</div>
-              <div class="setting-desc" id="yt-auth-desc">Authenticate with Google to bypass YouTube bot restrictions.</div>
+  <div class="setting-desc" id="yt-auth-desc">An optional instance-managed playback cookie file is loaded.</div>
             </div>
-            <button class="search-btn" id="btn-yt-connect" onclick="startYouTubeAuth()">Connect Account</button>
+            <button class="search-btn" id="btn-yt-connect" onclick="startYouTubeAuth()">Manage Playback Cookies</button>
           </div>
 
           <h3 style="margin: 24px 0 16px 0; font-size: 16px; color: var(--text);">Admin Actions</h3>
@@ -244,7 +243,7 @@
   <div class="modal-content" style="max-width: 480px; text-align: left; padding: 24px;">
     <h3 style="margin-bottom: 8px; font-size: 18px; color: var(--text);">YouTube Authentication</h3>
     <p style="font-size: 13px; color: var(--text-sub); margin-bottom: 16px; line-height: 1.5;">
-      Upload or paste your exported <code>cookies.txt</code> to bypass YouTube bot restrictions.
+      Upload or paste the instance's exported <code>cookies.txt</code>. Use a dedicated account and only upload over HTTPS.
     </p>
 
     <!-- File Upload -->

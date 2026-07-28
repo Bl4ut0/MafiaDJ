@@ -46,7 +46,7 @@ The recommended production setup is via **Docker Compose** or **Dockge**.
        container_name: mafiadj
        restart: unless-stopped
        ports:
-         - "3001:3000"  # Access Web Companion at http://your-server-ip:3001
+         - "3001:3000"  # Put an HTTPS reverse proxy in front for remote access.
        env_file:
          - .env
        volumes:
@@ -69,14 +69,19 @@ The recommended production setup is via **Docker Compose** or **Dockge**.
    # Web Dashboard Configuration
    DASHBOARD_ENABLED=true
    DASHBOARD_PORT=3000
-   DASHBOARD_SESSION_SECRET=a_long_random_secret_string
+   DASHBOARD_SESSION_SECRET=generate_a_random_32_character_minimum_secret
    DISCORD_CLIENT_SECRET=your_discord_client_secret
-   DASHBOARD_REDIRECT_URI=http://your-server-ip:3001/auth/callback
+   DASHBOARD_REDIRECT_URI=https://your-dashboard-domain/auth/callback
+   DASHBOARD_COOKIE_SECURE=true
+   DASHBOARD_TRUST_PROXY=true
 
    # Executable Paths (Docker)
    YTDLP_PATH=yt-dlp
    FFMPEG_PATH=ffmpeg
    LIBRESPOT_PATH=librespot
+
+   # Optional: allow direct media from only these HTTPS hosts.
+   DIRECT_MEDIA_HOSTS=media.example.com
 
    LOG_LEVEL=info
    ```
@@ -108,6 +113,12 @@ Slash commands are **automatically registered** with Discord API on bot startup.
 - **Universal Search**: Search YouTube & Spotify directly from the browser and queue tracks with one click.
 - **Favorites & Playlists**: Manage your personal library and server playlists with instant sync to Discord.
 - **Discord OAuth2 Login**: Secure role-based login matching your server permissions.
+
+### Security notes
+
+- Expose the Web Companion through HTTPS only. Configure the two dashboard cookie/proxy variables above when TLS terminates at a reverse proxy.
+- The optional `data/cookies.txt` is an instance-owner credential, not a user login. Keep it out of source control and Docker build contexts, restrict access to the host, and use a dedicated non-sensitive account if you retain unsupported YouTube playback.
+- Google/YouTube Data API OAuth authorizes metadata and account-management APIs; it does not grant the bot an official audio-stream relay permission.
 
 ---
 

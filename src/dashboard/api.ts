@@ -27,7 +27,7 @@ apiRouter.get('/me', requireAuth, (req: Request, res: Response) => {
 });
 
 // GET /api/state — full player state (public — no sensitive data)
-apiRouter.get('/state', (_req: Request, res: Response) => {
+apiRouter.get('/state', requireAuth, (_req: Request, res: Response) => {
     try {
         res.json(buildState());
     } catch (err) {
@@ -41,6 +41,7 @@ apiRouter.get('/search', requireAuth, async (req: Request, res: Response) => {
     const source = (req.query.source as string) ?? 'youtube';
 
     if (!q) return res.status(400).json({ error: 'Missing query' });
+    if (q.length > 200) return res.status(400).json({ error: 'Search query is too long' });
 
     try {
         const player = PlayerManager.getPlayer(config.guildId);
@@ -86,7 +87,7 @@ apiRouter.get('/search', requireAuth, async (req: Request, res: Response) => {
 apiRouter.post('/play', requireDJ, async (req: Request, res: Response) => {
     const { url } = req.body;
     const s = req.session as any;
-    if (!url) return res.status(400).json({ error: 'Missing url' });
+    if (typeof url !== 'string' || url.length > 2_048) return res.status(400).json({ error: 'Invalid media URL' });
 
     try {
         const player = PlayerManager.getPlayer(config.guildId);
@@ -327,9 +328,7 @@ apiRouter.post('/leave', requireDJ, (_req: Request, res: Response) => {
 });
 
 // POST /api/stop (admin only)
-apiRouter.post('/stop', (req: Request, res: Response) => {
-    const role = (req.session as any)?.role;
-    if (role !== 'admin' && role !== 'dj') return res.status(403).json({ error: 'Insufficient permissions' });
+apiRouter.post('/stop', requireDJ, (_req: Request, res: Response) => {
     try {
         const player = PlayerManager.getPlayer(config.guildId);
         player.stop();
@@ -369,8 +368,20 @@ apiRouter.get('/favorites/check', requireAuth, (req: Request, res: Response) => 
 apiRouter.post('/favorites/toggle', requireAuth, (req: Request, res: Response) => {
     try {
         const s = req.session as any;
-        const track = req.body; // Expects { url, title, artist, thumbnail, duration, source }
-        if (!track || !track.url) return res.status(400).json({ error: 'Invalid track data' });
+        const input = req.body ?? {};
+        if (typeof input.url !== 'string' || input.url.length > 2_048) {
+            return res.status(400).json({ error: 'Invalid track URL' });
+        }
+        const track = {
+            url: input.url,
+            title: String(input.title ?? 'Unknown').slice(0, 300),
+            artist: String(input.artist ?? '').slice(0, 300),
+            thumbnail: typeof input.thumbnail === 'string' && /^https:\/\//i.test(input.thumbnail) ? input.thumbnail.slice(0, 2_048) : '',
+            duration: Number.isFinite(Number(input.duration)) ? Math.max(0, Math.min(Number(input.duration), 10 * 60 * 60)) : 0,
+            source: ['youtube', 'spotify', 'soundcloud', 'direct'].includes(input.source) ? input.source : 'direct',
+            requesterId: s.userId,
+            addedAt: Date.now(),
+        };
         
         const added = Favorites.toggle(s.userId, track);
         res.json({ ok: true, added });
@@ -395,8 +406,8 @@ apiRouter.get('/playlists', requireAuth, (req: Request, res: Response) => {
 apiRouter.post('/playlists', requireAuth, (req: Request, res: Response) => {
     try {
         const s = req.session as any;
-        const { name } = req.body;
-        if (!name) return res.status(400).json({ error: 'Name required' });
+        const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
+        if (!name || name.length > 100) return res.status(400).json({ error: 'Playlist name must be 1-100 characters' });
         
         const created = PersonalPlaylists.create(s.userId, name);
         if (!created) return res.status(400).json({ error: 'Playlist already exists' });
@@ -410,10 +421,11 @@ apiRouter.post('/playlists', requireAuth, (req: Request, res: Response) => {
 // GET /api/playlists/:id/tracks
 apiRouter.get('/playlists/:id/tracks', requireAuth, (req: Request, res: Response) => {
     try {
+        const s = req.session as any;
         const id = parseInt(req.params.id as string);
         if (isNaN(id)) return res.status(400).json({ error: 'Invalid ID' });
         
-        const tracks = PersonalPlaylists.getTracks(id);
+        const tracks = PersonalPlaylists.getTracks(id, s.userId);
         res.json(tracks);
     } catch (err) {
         res.status(500).json({ error: 'Failed to fetch playlist tracks' });
@@ -423,12 +435,13 @@ apiRouter.get('/playlists/:id/tracks', requireAuth, (req: Request, res: Response
 // POST /api/playlists/:id/add
 apiRouter.post('/playlists/:id/add', requireAuth, (req: Request, res: Response) => {
     try {
+        const s = req.session as any;
         const playlistId = parseInt(req.params.id as string);
         const favoriteId = parseInt(req.body.favoriteId);
         if (isNaN(playlistId) || isNaN(favoriteId)) return res.status(400).json({ error: 'Invalid IDs' });
         
-        const added = PersonalPlaylists.addTrack(playlistId, favoriteId);
-        if (!added) return res.status(400).json({ error: 'Track already in playlist' });
+        const added = PersonalPlaylists.addTrack(playlistId, favoriteId, s.userId);
+        if (!added) return res.status(400).json({ error: 'Playlist or favorite not found, or track already exists' });
         
         res.json({ ok: true });
     } catch (err) {

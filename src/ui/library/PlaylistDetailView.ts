@@ -15,7 +15,7 @@ export class PlaylistDetailView {
             return { embeds: [embed], components: [] };
         }
 
-        const allTracks = PersonalPlaylists.getTracks(playlistId);
+        const allTracks = PersonalPlaylists.getTracks(playlistId, userId);
         const limit = 10;
         const offset = (page - 1) * limit;
         const tracks = allTracks.slice(offset, offset + limit);

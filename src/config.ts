@@ -18,17 +18,20 @@ if (fs.existsSync(configPath)) {
 }
 
 export const config: BotConfig = {
-    discordToken: process.env.DISCORD_TOKEN || '',
-    discordClientId: process.env.DISCORD_CLIENT_ID || '',
-    guildId: process.env.GUILD_ID || '',
-    spotifyClientId: process.env.SPOTIFY_CLIENT_ID || '',
-    spotifyClientSecret: process.env.SPOTIFY_CLIENT_SECRET || '',
-    spotifyUsername: process.env.SPOTIFY_USERNAME,
-    spotifyPassword: process.env.SPOTIFY_PASSWORD,
+    ...fileConfig,
+    // Environment variables take precedence over config.json so deployment
+    // secrets cannot be accidentally overridden by an image-bundled file.
+    discordToken: process.env.DISCORD_TOKEN || fileConfig.discordToken || '',
+    discordClientId: process.env.DISCORD_CLIENT_ID || fileConfig.discordClientId || '',
+    guildId: process.env.GUILD_ID || fileConfig.guildId || '',
+    spotifyClientId: process.env.SPOTIFY_CLIENT_ID || fileConfig.spotifyClientId || '',
+    spotifyClientSecret: process.env.SPOTIFY_CLIENT_SECRET || fileConfig.spotifyClientSecret || '',
+    spotifyUsername: process.env.SPOTIFY_USERNAME || fileConfig.spotifyUsername,
+    spotifyPassword: process.env.SPOTIFY_PASSWORD || fileConfig.spotifyPassword,
     bot: {
-        logLevel: process.env.LOG_LEVEL || 'info'
-    },
-    ...fileConfig
+        ...fileConfig.bot,
+        logLevel: process.env.LOG_LEVEL || fileConfig.bot?.logLevel || 'info'
+    }
 };
 
 // Validate essential config
