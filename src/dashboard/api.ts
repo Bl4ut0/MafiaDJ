@@ -124,9 +124,9 @@ apiRouter.post('/play', requireDJ, async (req: Request, res: Response) => {
             player.playNext();
         }
         res.json({ ok: true, added: tracks.length });
-    } catch (err) {
-        logger.error('[Dashboard API] Play error:', err);
-        res.status(500).json({ error: 'Failed to queue track' });
+    } catch (err: any) {
+        logger.error(`[Dashboard API] Play error: ${err?.stack || err?.message || err}`);
+        res.status(500).json({ error: err?.message || 'Failed to queue track' });
     }
 });
 
