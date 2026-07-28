@@ -414,68 +414,65 @@ async function checkYouTubeAuthStatus() {
     } catch {}
 }
 
-async function startYouTubeAuth() {
+function startYouTubeAuth() {
     if (!user || user.role !== 'admin') {
         showToast("🔒 Admin role required");
         return;
     }
-    try {
-        const res = await fetch('/api/youtube/auth/init', { method: 'POST' });
-        const data = await res.json();
-        if (!res.ok) {
-            alert(data.error || 'Failed to start authentication');
-            return;
-        }
-
-        document.getElementById('yt-user-code').textContent = data.user_code;
-        const verifyLink = document.getElementById('yt-verify-link');
-        verifyLink.href = data.verification_url;
-
-        document.getElementById('yt-auth-modal').classList.remove('hidden');
-        document.getElementById('yt-auth-status').textContent = 'Waiting for Google authorization...';
-
-        // Start polling
-        clearInterval(ytPollTimer);
-        const intervalMs = (data.interval || 5) * 1000;
-        ytPollTimer = setInterval(() => pollYouTubeAuth(data.device_code), intervalMs);
-
-    } catch (err) {
-        alert('Could not start YouTube authentication.');
-    }
-}
-
-async function pollYouTubeAuth(deviceCode) {
-    try {
-        const res = await fetch('/api/youtube/auth/poll', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ deviceCode })
-        });
-        const data = await res.json();
-
-        if (data.status === 'complete') {
-            clearInterval(ytPollTimer);
-            document.getElementById('yt-auth-status').textContent = '✅ Connected successfully!';
-            showToast('YouTube Account Connected!');
-            setTimeout(closeYtAuthModal, 1500);
-            checkYouTubeAuthStatus();
-        } else if (data.status === 'expired' || data.status === 'error') {
-            clearInterval(ytPollTimer);
-            document.getElementById('yt-auth-status').textContent = '❌ Authorization expired or failed.';
-        }
-    } catch {}
+    document.getElementById('yt-auth-modal').classList.remove('hidden');
 }
 
 function closeYtAuthModal() {
-    clearInterval(ytPollTimer);
     document.getElementById('yt-auth-modal').classList.add('hidden');
+}
+
+async function saveCookieContent(content) {
+    try {
+        const res = await fetch('/api/youtube/cookies', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ cookiesContent: content })
+        });
+        const data = await res.json();
+        if (res.ok && data.ok) {
+            showToast('✅ YouTube Cookies Saved!');
+            closeYtAuthModal();
+            checkYouTubeAuthStatus();
+        } else {
+            alert(data.error || 'Failed to save cookies.');
+        }
+    } catch {
+        alert('Failed to connect to server.');
+    }
+}
+
+function handleCookieFileUpload(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        const content = e.target.result;
+        if (content) saveCookieContent(content);
+    };
+    reader.readAsText(file);
+}
+
+function savePastedCookies() {
+    const textarea = document.getElementById('yt-cookie-text');
+    const content = textarea.value.trim();
+    if (!content) {
+        alert('Please paste valid cookies.txt content or upload a file.');
+        return;
+    }
+    saveCookieContent(content);
 }
 
 // Explicitly export to global window scope so inline onclick handler works
 window.startYouTubeAuth = startYouTubeAuth;
-window.pollYouTubeAuth = pollYouTubeAuth;
 window.closeYtAuthModal = closeYtAuthModal;
 window.checkYouTubeAuthStatus = checkYouTubeAuthStatus;
+window.handleCookieFileUpload = handleCookieFileUpload;
+window.savePastedCookies = savePastedCookies;
 
 // ── Controls ────────────────────────────────────────────────────────────────
 async function apiPost(endpoint, body = {}) {

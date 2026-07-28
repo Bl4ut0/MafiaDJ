@@ -436,34 +436,39 @@ apiRouter.post('/playlists/:id/add', requireAuth, (req: Request, res: Response) 
     }
 });
 
-// ─── YouTube Google Account Authentication ──────────────────────────────
-import { isYouTubeAuthenticated, initYouTubeDeviceAuth, pollYouTubeDeviceAuth } from '../sources/youtubeAuth';
+// ─── YouTube Account Authentication (cookies.txt) ──────────────────────
+import { isYouTubeAuthenticated, saveYouTubeCookies, deleteYouTubeCookies } from '../sources/youtubeAuth';
 
 // GET /api/youtube/status
 apiRouter.get('/youtube/status', requireAuth, (_req: Request, res: Response) => {
     res.json({ authenticated: isYouTubeAuthenticated() });
 });
 
-// POST /api/youtube/auth/init (Admin only)
-apiRouter.post('/youtube/auth/init', requireAdmin, async (_req: Request, res: Response) => {
+// POST /api/youtube/cookies { cookiesContent } (Admin only)
+apiRouter.post('/youtube/cookies', requireAdmin, (req: Request, res: Response) => {
     try {
-        const data = await initYouTubeDeviceAuth();
-        res.json(data);
+        const { cookiesContent } = req.body;
+        if (!cookiesContent || typeof cookiesContent !== 'string') {
+            return res.status(400).json({ error: 'Please paste valid cookies.txt content' });
+        }
+        const ok = saveYouTubeCookies(cookiesContent);
+        if (ok) {
+            res.json({ ok: true });
+        } else {
+            res.status(500).json({ error: 'Failed to save cookies on server' });
+        }
     } catch (err: any) {
-        logger.error('[Dashboard API] YouTube auth init error:', err);
-        res.status(500).json({ error: err?.message || 'Failed to start YouTube authentication' });
+        logger.error('[Dashboard API] YouTube cookies error:', err);
+        res.status(500).json({ error: 'Failed to process cookies' });
     }
 });
 
-// POST /api/youtube/auth/poll { deviceCode } (Admin only)
-apiRouter.post('/youtube/auth/poll', requireAdmin, async (req: Request, res: Response) => {
+// DELETE /api/youtube/cookies (Admin only)
+apiRouter.delete('/youtube/cookies', requireAdmin, (_req: Request, res: Response) => {
     try {
-        const { deviceCode } = req.body;
-        if (!deviceCode) return res.status(400).json({ error: 'Missing deviceCode' });
-        const result = await pollYouTubeDeviceAuth(deviceCode);
-        res.json(result);
+        deleteYouTubeCookies();
+        res.json({ ok: true });
     } catch (err: any) {
-        logger.error('[Dashboard API] YouTube auth poll error:', err);
-        res.status(500).json({ error: 'Poll failed' });
+        res.status(500).json({ error: 'Failed to delete cookies' });
     }
 });
