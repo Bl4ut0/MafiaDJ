@@ -11,8 +11,8 @@ RUN apt-get update && apt-get install -y python3 make g++ gcc curl ca-certificat
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 ENV PATH="/root/.cargo/bin:${PATH}"
 
-# Build librespot from source via Cargo
-RUN cargo install librespot
+# Build librespot from source via Cargo (using --locked for exact crate versions)
+RUN cargo install librespot --locked
 
 COPY package*.json tsconfig.json ./
 RUN npm install
