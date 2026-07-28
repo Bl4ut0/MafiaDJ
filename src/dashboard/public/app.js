@@ -150,7 +150,12 @@ function applyState(s) {
     renderQueue(s.queue);
 
     // Server info
-    if (s.serverName) document.getElementById('server-name').textContent = s.serverName;
+    const serverNameEl = document.getElementById('server-name');
+    if (s.serverName && s.serverName !== 'MafiaDJ') {
+        serverNameEl.textContent = s.serverName;
+    } else {
+        serverNameEl.textContent = '';
+    }
     if (s.serverIcon) {
         const icon = document.getElementById('server-icon');
         icon.src = s.serverIcon; icon.style.display = 'inline-block';
