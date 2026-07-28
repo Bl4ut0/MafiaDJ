@@ -2,15 +2,17 @@ import { spawn } from 'child_process';
 import { Readable } from 'stream';
 import { config } from '../config';
 import { logger } from '../utils/logger';
+import { getYtDlpBaseArgs } from '../utils/ytdlp';
 
 export function createYtDlpStream(url: string): Readable {
     // yt-dlp arguments to stream audio
     const ytDlp = spawn((config as any).paths?.ytdlp || 'yt-dlp', [
-        url,
+        ...getYtDlpBaseArgs(),
         '-o', '-',
         '-q',
         '-f', 'bestaudio',
-        '--no-playlist' // for single track
+        '--no-playlist',
+        url
     ]);
 
     // ffmpeg arguments to convert to opus/pcm (or just s16le for Discord)

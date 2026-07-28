@@ -1,13 +1,13 @@
 import { spawn } from 'child_process';
 import { QueueItem } from '../types';
 import { config } from '../config';
+import { getYtDlpBaseArgs } from '../utils/ytdlp';
 
 export async function getYtInfo(url: string, requesterId: string): Promise<QueueItem | QueueItem[]> {
     return new Promise((resolve, reject) => {
         const process = spawn((config as any).paths?.ytdlp || 'yt-dlp', [
+            ...getYtDlpBaseArgs(),
             '--dump-json',
-            // If it's a playlist URL, we might want --flat-playlist for speed, but then we lack duration/thumbnail often?
-            // For now, full dump is safer for metadata, even if slower for large playlists.
             url
         ]);
 
@@ -63,9 +63,10 @@ export async function getYtInfo(url: string, requesterId: string): Promise<Queue
 export async function searchYouTube(query: string): Promise<string | null> {
     return new Promise((resolve, reject) => {
         const process = spawn((config as any).paths?.ytdlp || 'yt-dlp', [
+            ...getYtDlpBaseArgs(),
             '--get-url',
             '--no-playlist',
-            `ytsearch1:${query}` // Search for 1 result
+            `ytsearch1:${query}`
         ]);
 
         let output = '';
