@@ -3,12 +3,12 @@ import { QueueItem } from '../types';
 import { config } from '../config';
 import { getYtDlpBaseArgs } from '../utils/ytdlp';
 
-export async function getYtInfo(url: string, requesterId: string): Promise<QueueItem | QueueItem[]> {
+function fetchInfoDirect(urlTarget: string, requesterId: string): Promise<QueueItem | QueueItem[]> {
     return new Promise((resolve, reject) => {
         const process = spawn((config as any).paths?.ytdlp || 'yt-dlp', [
             ...getYtDlpBaseArgs(),
             '--dump-json',
-            url
+            urlTarget
         ]);
 
         let output = '';
@@ -38,7 +38,7 @@ export async function getYtInfo(url: string, requesterId: string): Promise<Queue
                         tracks.push({
                             title: info.title || 'Unknown Title',
                             artist: info.uploader || 'Unknown Artist',
-                            url: info.webpage_url || url,
+                            url: info.webpage_url || urlTarget,
                             thumbnail: info.thumbnail || '',
                             duration: info.duration || 0,
                             source: 'youtube',
@@ -58,6 +58,21 @@ export async function getYtInfo(url: string, requesterId: string): Promise<Queue
             }
         });
     });
+}
+
+export async function getYtInfo(url: string, requesterId: string): Promise<QueueItem | QueueItem[]> {
+    try {
+        return await fetchInfoDirect(url, requesterId);
+    } catch (err: any) {
+        if (err.message && (err.message.includes('Sign in to confirm') || err.message.includes('bot'))) {
+            try {
+                return await fetchInfoDirect(`ytsearch1:${url}`, requesterId);
+            } catch {
+                throw err;
+            }
+        }
+        throw err;
+    }
 }
 
 export async function searchYouTube(query: string): Promise<string | null> {
