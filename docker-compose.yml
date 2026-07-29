@@ -24,21 +24,26 @@ services:
       - no-new-privileges:true
     pids_limit: 128
 
-  # Optional, private desktop used only by a Discord administrator to renew an
-  # instance-owned YouTube session. Publish it only on loopback and route a
-  # dedicated HTTPS hostname through Cloudflare Tunnel + Cloudflare Access.
-  # Do not expose this service directly to the Internet.
+  # Private Chromium desktop for an instance-owned YouTube session. It has no
+  # published port: the dashboard proxies /private-browser/ after Discord admin
+  # authorization, including its WebSocket upgrades.
   youtube-browser:
     image: lscr.io/linuxserver/chromium@sha256:92933242f71646b24d568cab82c8da1eb0838c067a281ad9dce74fe94e7d0fe1
     restart: unless-stopped
     init: true
-    ports:
-      - "127.0.0.1:${YOUTUBE_BROWSER_HOST_PORT:-3002}:3000"
+    expose:
+      - "3000"
     environment:
       PUID: "10001"
       PGID: "10001"
       TZ: "${TZ:-Etc/UTC}"
       CHROME_CLI: "https://www.youtube.com/"
+      SUBFOLDER: "/private-browser/"
+      TITLE: "MafiaDJ YouTube Session"
+      START_DOCKER: "false"
+      HARDEN_DESKTOP: "true"
+      HARDEN_OPENBOX: "true"
+      DISABLE_IPV6: "true"
     volumes:
       - ./data/youtube-browser:/config
     shm_size: "1gb"
@@ -64,6 +69,7 @@ services:
       DASHBOARD_ALLOW_INSECURE_HTTP: "true"
       YOUTUBE_POT_PROVIDER_URL: "http://pot-provider:4416"
       YOUTUBE_BROWSER_PROFILE: "${YOUTUBE_BROWSER_PROFILE:-data/youtube-browser/.config/chromium}"
+      YOUTUBE_BROWSER_PROXY_ENABLED: "true"
     depends_on:
       pot-provider:
         condition: service_healthy

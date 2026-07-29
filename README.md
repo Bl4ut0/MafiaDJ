@@ -100,22 +100,16 @@ interactively from the dashboard's **Open Private Browser** action and the bot
 reads the persistent profile from its own data volume. This is not Google OAuth
 and it does not make YouTube authentication permanent.
 
-Before enabling it, create a **separate HTTPS hostname** in Cloudflare Tunnel
-that points to `http://127.0.0.1:3002`, then protect that hostname with a
-Cloudflare Access policy limited to the administrator. A dashboard login cannot
-secure a separate remote-desktop hostname by itself. After that policy is live:
+The desktop is served at `/private-browser/` on the existing dashboard origin
+(for example, `https://mafiadj.bl4ut0.dev/private-browser/`). It has no
+published Docker port and requires the existing Discord-admin session for both
+HTTP and WebSocket requests. Cloudflare Tunnel continues to route only the
+existing MafiaDJ domain; no second hostname or tunnel route is needed.
 
-```env
-YOUTUBE_BROWSER_URL=https://youtube-browser.example.com
-YOUTUBE_BROWSER_ACCESS_PROTECTED=true
-```
-
-The browser service listens only on host loopback and its image is pinned by
-digest. Do not publish its port directly, share its persistent
-`data/youtube-browser` directory, or use a personal Google account. The dashboard exposes the
-launcher only to Discord administrators and only after the explicit Access
-acknowledgement above. If no browser profile is available, the legacy
-admin-only `cookies.txt` upload remains an optional fallback.
+The browser image is pinned by digest. Do not share its persistent
+`data/youtube-browser` directory or use a personal Google account. If no
+browser profile is available, the legacy admin-only `cookies.txt` upload remains
+an optional fallback.
 
 Private, members-only, and other account-gated content still requires an
 authorized YouTube account and is not made public by PO tokens. The provider

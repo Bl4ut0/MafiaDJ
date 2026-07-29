@@ -31,24 +31,12 @@ export function isYouTubeBrowserProfileAvailable(): boolean {
 }
 
 /**
- * A remote desktop is a separate security boundary. Do not present its URL
- * until the administrator has placed it behind Cloudflare Access (or an
- * equivalent identity-aware gateway) and explicitly acknowledged that fact.
+ * The desktop is reverse-proxied by the dashboard on the existing HTTPS
+ * origin. It has no published port and is reachable only after Discord admin
+ * authorization in the dashboard server.
  */
-export function getYouTubeBrowserLaunchUrl(): string | null {
-    if (process.env.YOUTUBE_BROWSER_ACCESS_PROTECTED !== 'true') return null;
-
-    const value = process.env.YOUTUBE_BROWSER_URL?.trim();
-    if (!value) return null;
-    try {
-        const url = new URL(value);
-        if (url.protocol !== 'https:' || !url.hostname || url.username || url.password) {
-            return null;
-        }
-        return url.href;
-    } catch {
-        return null;
-    }
+export function isYouTubeBrowserProxyEnabled(): boolean {
+    return process.env.YOUTUBE_BROWSER_PROXY_ENABLED === 'true';
 }
 
 export function isYouTubeAuthenticated(): boolean {

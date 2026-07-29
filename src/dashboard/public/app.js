@@ -457,8 +457,8 @@ async function checkYouTubeAuthStatus() {
         const desc = document.getElementById('yt-auth-desc');
         
         if (browserBtn) {
-            browserBtn.disabled = !data.browserLaunchAvailable || !user || user.role !== 'admin';
-            browserBtn.style.display = data.browserLaunchAvailable ? '' : 'none';
+            browserBtn.disabled = !data.browserProxyEnabled || !user || user.role !== 'admin';
+            browserBtn.style.display = data.browserProxyEnabled ? '' : 'none';
         }
 
         if (data.browserProfileAvailable) {
@@ -479,8 +479,15 @@ function launchYouTubeBrowser() {
         showToast("Admin role required");
         return;
     }
-    const session = window.open('/api/youtube/browser/launch', '_blank', 'noopener');
-    if (!session) showToast('Allow pop-ups to open the private browser session.');
+    const frame = document.getElementById('yt-browser-frame');
+    if (frame) frame.src = '/private-browser/';
+    document.getElementById('yt-browser-modal').classList.remove('hidden');
+}
+
+function closeYouTubeBrowser() {
+    document.getElementById('yt-browser-modal').classList.add('hidden');
+    const frame = document.getElementById('yt-browser-frame');
+    if (frame) frame.src = 'about:blank';
 }
 
 function startYouTubeAuth() {
@@ -539,6 +546,7 @@ function savePastedCookies() {
 // Explicitly export to global window scope so inline onclick handler works
 window.startYouTubeAuth = startYouTubeAuth;
 window.launchYouTubeBrowser = launchYouTubeBrowser;
+window.closeYouTubeBrowser = closeYouTubeBrowser;
 window.closeYtAuthModal = closeYtAuthModal;
 window.checkYouTubeAuthStatus = checkYouTubeAuthStatus;
 window.handleCookieFileUpload = handleCookieFileUpload;

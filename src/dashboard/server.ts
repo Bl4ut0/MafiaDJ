@@ -1,7 +1,8 @@
-import express from 'express';
+import express, { Request } from 'express';
 import session from 'express-session';
 import { createServer, ServerResponse } from 'http';
 import { WebSocketServer, WebSocket } from 'ws';
+import { createProxyMiddleware, RequestHandler } from 'http-proxy-middleware';
 import path from 'path';
 import { authRouter } from './auth';
 import { apiRouter } from './api';
@@ -23,8 +24,15 @@ if (!fs.existsSync(path.join(publicDir, 'index.html'))) {
 
 const PORT = parseInt(process.env.PORT || process.env.DASHBOARD_PORT || '3000');
 const HOST = process.env.DASHBOARD_HOST || '127.0.0.1';
+const PRIVATE_BROWSER_PATH = '/private-browser';
 
 let wss: WebSocketServer;
+
+function rejectUpgrade(socket: import('stream').Duplex, status: 401 | 403 | 502) {
+    const reason = status === 401 ? 'Unauthorized' : status === 403 ? 'Forbidden' : 'Bad Gateway';
+    socket.write(`HTTP/1.1 ${status} ${reason}\r\n\r\n`);
+    socket.destroy();
+}
 
 /** Broadcast current player state to all connected WebSocket clients */
 function broadcast() {
@@ -108,8 +116,53 @@ export function startDashboard() {
         },
     });
 
+    const browserProxyEnabled = process.env.YOUTUBE_BROWSER_PROXY_ENABLED === 'true';
+    const youtubeBrowserProxy: RequestHandler<Request, ServerResponse> | null = browserProxyEnabled
+        ? createProxyMiddleware<Request, ServerResponse>({
+            target: 'http://youtube-browser:3000',
+            changeOrigin: true,
+            ws: false,
+            proxyTimeout: 15_000,
+            timeout: 60_000,
+            cookiePathRewrite: { '/': `${PRIVATE_BROWSER_PATH}/` },
+            on: {
+                error: (error, _req, response) => {
+                    logger.warn(`[YouTube Browser] Proxy error: ${error.message}`);
+                    if (response instanceof ServerResponse) {
+                        if (!response.headersSent) response.writeHead(502, { 'Content-Type': 'application/json' });
+                        response.end(JSON.stringify({ error: 'Private browser is temporarily unavailable.' }));
+                    } else {
+                        response.destroy();
+                    }
+                },
+                proxyRes: proxyResponse => {
+                    // The browser is framed only by this same-origin admin page.
+                    proxyResponse.headers['x-frame-options'] = 'SAMEORIGIN';
+                    proxyResponse.headers['content-security-policy'] = "frame-ancestors 'self'";
+                },
+            },
+        })
+        : null;
+
     // Middleware
     app.use(sessionMiddleware);
+    if (youtubeBrowserProxy) {
+        app.use(PRIVATE_BROWSER_PATH, async (req, res, next) => {
+            try {
+                const userId = (req.session as any).userId;
+                if (!userId) return res.status(401).json({ error: 'Not authenticated' });
+                const role = await getDashboardRole(userId);
+                if (role !== 'admin') return res.status(403).json({ error: 'Admin role required' });
+
+                // Express removes the mount path. Selkies is configured with a
+                // subfolder and must receive it on every HTTP request.
+                req.url = `${PRIVATE_BROWSER_PATH}${req.url}`;
+                youtubeBrowserProxy(req, res, next);
+            } catch {
+                res.status(503).json({ error: 'Discord permissions could not be verified.' });
+            }
+        });
+    }
     app.use(express.json({ limit: '256kb' }));
     app.use((_req, res, next) => {
         res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -119,7 +172,7 @@ export function startDashboard() {
         res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
         res.setHeader(
             'Content-Security-Policy',
-            "default-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self' https://discord.com; img-src 'self' https: data:; connect-src 'self' ws: wss:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'"
+            "default-src 'self'; base-uri 'none'; frame-ancestors 'none'; frame-src 'self'; form-action 'self' https://discord.com; img-src 'self' https: data:; connect-src 'self' ws: wss:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'"
         );
         next();
     });
@@ -142,6 +195,40 @@ export function startDashboard() {
     wss = new WebSocketServer({ noServer: true });
 
     server.on('upgrade', (request, socket, head) => {
+        if (youtubeBrowserProxy && request.url?.startsWith(`${PRIVATE_BROWSER_PATH}/`)) {
+            const origin = request.headers.origin;
+            try {
+                if (!origin || new URL(origin).host !== request.headers.host) {
+                    rejectUpgrade(socket, 403);
+                    return;
+                }
+            } catch {
+                rejectUpgrade(socket, 403);
+                return;
+            }
+            const sessionResponse = new ServerResponse(request);
+            sessionMiddleware(request as any, sessionResponse as any, async (err) => {
+                if (err || !(request as any).session?.userId) {
+                    rejectUpgrade(socket, 401);
+                    return;
+                }
+                try {
+                    const currentSession = (request as any).session;
+                    const role = await getDashboardRole(currentSession.userId);
+                    if (role !== 'admin') {
+                        rejectUpgrade(socket, 403);
+                        return;
+                    }
+                    currentSession.role = role;
+                    currentSession.lastRoleCheck = Date.now();
+                    youtubeBrowserProxy.upgrade(request, socket as import('net').Socket, head);
+                } catch {
+                    rejectUpgrade(socket, 502);
+                }
+            });
+            return;
+        }
+
         if (request.url !== '/ws') {
             socket.destroy();
             return;
