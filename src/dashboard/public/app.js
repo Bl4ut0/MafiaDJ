@@ -15,6 +15,33 @@ function jsonHeaders() {
     };
 }
 
+async function refreshCsrfToken() {
+    const response = await fetch('/api/me', { cache: 'no-store' });
+    if (!response.ok) return false;
+
+    const sessionUser = await response.json();
+    csrfToken = sessionUser.csrfToken || '';
+    if (user) user = { ...user, ...sessionUser };
+    return csrfToken.length > 0;
+}
+
+async function csrfFetch(input, init = {}, allowRetry = true) {
+    const headers = new Headers(init.headers || {});
+    headers.set('X-CSRF-Token', csrfToken);
+
+    const response = await fetch(input, { ...init, headers });
+    if (!allowRetry || response.status !== 403) return response;
+
+    const data = await response.clone().json().catch(() => null);
+    if (data?.error !== 'Invalid request token. Refresh the page and try again.') {
+        return response;
+    }
+
+    return await refreshCsrfToken()
+        ? csrfFetch(input, init, false)
+        : response;
+}
+
 // ── Progress interpolation ──────────────────────────────────────────────────
 let serverElapsed = 0;
 let serverTime = 0;
@@ -209,7 +236,7 @@ async function checkFavoriteStatus() {
 async function toggleFavorite() {
     if (!state?.currentTrack) return;
     try {
-        const res = await fetch('/api/favorites/toggle', {
+        const res = await csrfFetch('/api/favorites/toggle', {
             method: 'POST',
             headers: jsonHeaders(),
             body: JSON.stringify(state.currentTrack)
@@ -325,7 +352,7 @@ async function init() {
 
 async function logout() {
     try {
-        await fetch('/auth/logout', {
+        await csrfFetch('/auth/logout', {
             method: 'POST',
             headers: { 'X-CSRF-Token': csrfToken },
         });
@@ -353,7 +380,7 @@ async function joinSelectedChannel() {
 
 async function removeFromQueue(index) {
     try {
-        const res = await fetch('/api/queue/remove', {
+        const res = await csrfFetch('/api/queue/remove', {
             method: 'POST',
             headers: jsonHeaders(),
             body: JSON.stringify({ index }),
@@ -375,7 +402,7 @@ async function toggleSpotifyJam(enabled) {
         return;
     }
     try {
-        const res = await fetch('/api/settings/jam', {
+        const res = await csrfFetch('/api/settings/jam', {
             method: 'POST',
             headers: jsonHeaders(),
             body: JSON.stringify({ enabled }),
@@ -399,7 +426,7 @@ async function toggleSpotifyPlayback(enabled) {
         return;
     }
     try {
-        const res = await fetch('/api/settings/spotify', {
+        const res = await csrfFetch('/api/settings/spotify', {
             method: 'POST',
             headers: jsonHeaders(),
             body: JSON.stringify({ enabled }),
@@ -452,7 +479,7 @@ function closeYtAuthModal() {
 
 async function saveCookieContent(content) {
     try {
-        const res = await fetch('/api/youtube/cookies', {
+        const res = await csrfFetch('/api/youtube/cookies', {
             method: 'POST',
             headers: jsonHeaders(),
             body: JSON.stringify({ cookiesContent: content })
@@ -502,7 +529,7 @@ window.savePastedCookies = savePastedCookies;
 async function apiPost(endpoint, body = {}) {
     if (!isDJ) return;
     try {
-        const res = await fetch(endpoint, {
+        const res = await csrfFetch(endpoint, {
             method: 'POST',
             headers: jsonHeaders(),
             body: JSON.stringify(body),
@@ -644,7 +671,7 @@ async function loadPlaylists() {
 
 async function addFavoriteToPlaylist(favoriteId, playlistId) {
     if (!playlistId) return;
-    const res = await fetch(`/api/playlists/${playlistId}/add`, {
+    const res = await csrfFetch(`/api/playlists/${playlistId}/add`, {
         method: 'POST',
         headers: jsonHeaders(),
         body: JSON.stringify({ favoriteId }),
@@ -658,7 +685,7 @@ async function createPlaylist() {
     const name = input.value.trim();
     if (!name) return;
     try {
-        await fetch('/api/playlists', {
+        await csrfFetch('/api/playlists', {
             method: 'POST',
             headers: jsonHeaders(),
             body: JSON.stringify({ name })

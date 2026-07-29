@@ -61,7 +61,7 @@ async function main() {
         await client.login(config.discordToken);
 
     } catch (error) {
-        logger.fatal('Fatal error during startup:', error);
+        logger.fatal({ err: error }, 'Fatal error during startup');
         process.exit(1);
     }
 }
