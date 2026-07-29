@@ -1,65 +1,45 @@
-# Multi-stage build for MafiaDJ
-# Stage 1: Build TypeScript & librespot
-FROM node:22-slim AS builder
+FROM node:22-bookworm-slim AS app-builder
 
 WORKDIR /app
-
-# Install build tools for native npm modules and dependencies
-RUN apt-get update && apt-get install -y python3 make g++ gcc curl ca-certificates libasound2-dev pkg-config libssl-dev && rm -rf /var/lib/apt/lists/*
-
-# Install latest Rust toolchain via rustup (supports Rust 2024 edition for librespot)
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-ENV PATH="/root/.cargo/bin:${PATH}"
-
-# Build librespot from source via Cargo (using --locked for exact crate versions)
-RUN cargo install librespot --locked
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends python3 make g++ \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY package*.json tsconfig.json ./
 RUN npm ci
-
 COPY src ./src
-RUN npm run build
-RUN npm prune --omit=dev
+RUN npm run build \
+    && npm prune --omit=dev
 
-# Stage 2: Production runner
-FROM node:22-slim AS runner
+FROM node:22-bookworm-slim AS runner
+
+ARG YTDLP_VERSION=2026.06.09
+ARG YTDLP_SHA256=e5d57466682cfa9d61e9cf7c8a4f09b00f4a62af37d3bbdc4bcffdf63615feac
 
 WORKDIR /app
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ffmpeg curl ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && curl --fail --location --proto '=https' --tlsv1.2 \
+        "https://github.com/yt-dlp/yt-dlp/releases/download/${YTDLP_VERSION}/yt-dlp" \
+        --output /usr/local/bin/yt-dlp \
+    && echo "${YTDLP_SHA256}  /usr/local/bin/yt-dlp" | sha256sum --check --strict \
+    && chmod 0755 /usr/local/bin/yt-dlp \
+    && useradd --create-home --uid 10001 --shell /usr/sbin/nologin mafiadj
 
-# Install runtime dependencies: ffmpeg, python3, curl, ca-certificates, wget, tar, libasound2, libssl3
-RUN apt-get update && apt-get install -y \
-    ffmpeg \
-    python3 \
-    curl \
-    ca-certificates \
-    wget \
-    tar \
-    libasound2 \
-    libssl3 \
-    && rm -rf /var/lib/apt/lists/*
+COPY --chown=mafiadj:mafiadj package*.json config.json ./
+COPY --chown=mafiadj:mafiadj --from=app-builder /app/node_modules ./node_modules
+COPY --chown=mafiadj:mafiadj --from=app-builder /app/dist ./dist
+COPY --chown=mafiadj:mafiadj src/dashboard/public ./dist/dashboard/public
 
-# Install yt-dlp binary
-RUN curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp \
-    && chmod a+rx /usr/local/bin/yt-dlp
-
-# Copy compiled librespot binary from builder stage
-COPY --from=builder /root/.cargo/bin/librespot /usr/local/bin/librespot
-
-COPY package*.json ./
-COPY config.json ./config.json
-
-# Copy pre-compiled node_modules, JavaScript dist, and static assets from builder stage
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/dist ./dist
-COPY src/dashboard/public ./dist/dashboard/public
-COPY src/dashboard/public ./src/dashboard/public
-
-# Create directories for persistent data & cache
-RUN mkdir -p /app/data /app/spotify_cache
+RUN mkdir -p /app/data \
+    && chown -R mafiadj:mafiadj /app/data
 
 ENV NODE_ENV=production
 ENV PORT=3000
+ENV DASHBOARD_HOST=0.0.0.0
 
+USER mafiadj
 EXPOSE 3000
 
 CMD ["node", "dist/index.js"]

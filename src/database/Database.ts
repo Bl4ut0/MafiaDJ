@@ -12,6 +12,8 @@ if (!fs.existsSync(dataDir)) {
 
 const db = new Database(dbPath);
 db.pragma('journal_mode = WAL');
+db.pragma('foreign_keys = ON');
+db.pragma('busy_timeout = 5000');
 
 export default db;
 
@@ -26,7 +28,9 @@ export function initDatabase() {
             vote_skip_threshold INTEGER DEFAULT 50,
             vote_stop_threshold INTEGER DEFAULT 66,
             default_volume INTEGER DEFAULT 50,
-            autoplay_enabled INTEGER DEFAULT 0
+            autoplay_enabled INTEGER DEFAULT 0,
+            spotify_owner_sync_enabled INTEGER DEFAULT 0,
+            spotify_jam_enabled INTEGER DEFAULT 0
         );
     `);
 
@@ -115,5 +119,45 @@ export function initDatabase() {
         );
     `);
 
+    db.exec(`
+        CREATE TABLE IF NOT EXISTS play_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT NOT NULL,
+            guild_id TEXT NOT NULL,
+            title TEXT NOT NULL,
+            artist TEXT,
+            url TEXT NOT NULL,
+            thumbnail TEXT,
+            duration INTEGER,
+            source TEXT NOT NULL,
+            played_at TEXT DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS dashboard_sessions (
+            sid TEXT PRIMARY KEY,
+            session_json TEXT NOT NULL,
+            expires_at INTEGER NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_favorites_user_added
+            ON favorites(user_id, added_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_history_guild_played
+            ON play_history(guild_id, played_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_history_user_played
+            ON play_history(user_id, played_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_dashboard_sessions_expiry
+            ON dashboard_sessions(expires_at);
+    `);
+
+    ensureColumn('server_settings', 'spotify_owner_sync_enabled', 'INTEGER DEFAULT 0');
+    ensureColumn('server_settings', 'spotify_jam_enabled', 'INTEGER DEFAULT 0');
+
     console.log('Database initialized successfully.');
+}
+
+function ensureColumn(table: string, column: string, definition: string): void {
+    const columns = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+    if (!columns.some(item => item.name === column)) {
+        db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+    }
 }

@@ -9,6 +9,9 @@ import { buildState } from './state';
 import PlayerManager from '../player/PlayerManager';
 import { config } from '../config';
 import { logger } from '../utils/logger';
+import { SqliteSessionStore } from './SqliteSessionStore';
+import { requireCsrf } from './middleware';
+import { getDashboardRole } from './roles';
 
 import fs from 'fs';
 
@@ -19,6 +22,7 @@ if (!fs.existsSync(path.join(publicDir, 'index.html'))) {
 }
 
 const PORT = parseInt(process.env.PORT || process.env.DASHBOARD_PORT || '3000');
+const HOST = process.env.DASHBOARD_HOST || '127.0.0.1';
 
 let wss: WebSocketServer;
 
@@ -75,6 +79,16 @@ export function startDashboard() {
     const app = express();
     const server = createServer(app);
     const secureCookies = process.env.DASHBOARD_COOKIE_SECURE === 'true';
+    const isLoopback = HOST === '127.0.0.1' || HOST === '::1' || HOST === 'localhost';
+    const allowInsecureHttp = process.env.DASHBOARD_ALLOW_INSECURE_HTTP === 'true';
+
+    if (!isLoopback && !secureCookies && !allowInsecureHttp) {
+        logger.error('[Dashboard] Refusing a non-loopback listener without secure cookies or an explicit local-only HTTP override.');
+        return;
+    }
+    if (!secureCookies && allowInsecureHttp) {
+        logger.warn('[Dashboard] Insecure HTTP override enabled. Keep the published port bound to host loopback only.');
+    }
 
     if (process.env.DASHBOARD_TRUST_PROXY === 'true') {
         app.set('trust proxy', 1);
@@ -83,6 +97,7 @@ export function startDashboard() {
     const sessionMiddleware = session({
         name: 'mafiadj.sid',
         secret: sessionSecret,
+        store: new SqliteSessionStore(),
         resave: false,
         saveUninitialized: false,
         cookie: {
@@ -101,10 +116,17 @@ export function startDashboard() {
         res.setHeader('X-Frame-Options', 'DENY');
         res.setHeader('Referrer-Policy', 'same-origin');
         res.setHeader('Cache-Control', 'no-store');
+        res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+        res.setHeader(
+            'Content-Security-Policy',
+            "default-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self' https://discord.com; img-src 'self' https: data:; connect-src 'self' ws: wss:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'"
+        );
         next();
     });
+    app.use(requireCsrf);
 
     // Static files (public folder)
+    app.get('/healthz', (_req, res) => res.status(200).json({ ok: true }));
     app.use(express.static(publicDir));
 
     // Routes
@@ -125,9 +147,31 @@ export function startDashboard() {
             return;
         }
 
+        const origin = request.headers.origin;
+        let originIsValid = false;
+        try {
+            originIsValid = !!origin && new URL(origin).host === request.headers.host;
+        } catch {
+            originIsValid = false;
+        }
+        if (!originIsValid) {
+            socket.write('HTTP/1.1 403 Forbidden\r\n\r\n');
+            socket.destroy();
+            return;
+        }
+
         const sessionResponse = new ServerResponse(request);
-        sessionMiddleware(request as any, sessionResponse as any, (err) => {
+        sessionMiddleware(request as any, sessionResponse as any, async (err) => {
             if (err || !(request as any).session?.userId) {
+                socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
+                socket.destroy();
+                return;
+            }
+            try {
+                const currentSession = (request as any).session;
+                currentSession.role = await getDashboardRole(currentSession.userId);
+                currentSession.lastRoleCheck = Date.now();
+            } catch {
                 socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
                 socket.destroy();
                 return;
@@ -150,8 +194,8 @@ export function startDashboard() {
     // Subscribe to player events
     subscribeToPlayer();
 
-    server.listen(PORT, () => {
-        logger.info(`[Dashboard] Running at http://localhost:${PORT}`);
+    server.listen(PORT, HOST, () => {
+        logger.info(`[Dashboard] Running at http://${HOST}:${PORT}`);
     });
 
     server.on('error', (err: any) => {

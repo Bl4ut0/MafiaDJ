@@ -44,8 +44,8 @@ export class HistoryView {
         if (history.length > 0) {
             const trackOptions = history.map((t: any, i) => ({
                 label: `${offset + i + 1}. ${t.title.substring(0, 50)}`,
-                description: t.artist.substring(0, 50),
-                value: t.url.substring(0, 100) // Ensure max length
+                description: String(t.artist || 'Unknown Artist').substring(0, 50),
+                value: String(t.id)
             }));
 
             // Filter out duplicates in the dropdown if any (select menu requires unique values)

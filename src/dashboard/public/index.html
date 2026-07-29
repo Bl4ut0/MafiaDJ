@@ -50,7 +50,7 @@
       <img class="topbar-user-avatar" id="user-avatar" src="" alt="">
       <span class="topbar-user-name" id="user-name"></span>
       <span class="role-badge" id="role-badge"></span>
-      <button class="btn-logout" onclick="location.href='/auth/logout'">Logout</button>
+      <button class="btn-logout" type="button" onclick="logout()">Logout</button>
     </div>
   </header>
 
@@ -142,6 +142,7 @@
       <div class="tab-panel" id="panel-library">
         <div class="lib-header">
             <button class="lib-tab active" onclick="switchLibView('favorites')" id="lib-tab-favorites">Favorites</button>
+            <button class="lib-tab" onclick="switchLibView('history')" id="lib-tab-history">History</button>
             <button class="lib-tab" onclick="switchLibView('playlists')" id="lib-tab-playlists">Playlists</button>
         </div>
         
@@ -149,6 +150,13 @@
         <div id="lib-view-favorites" class="lib-view active">
             <div id="favorites-list">
                 <div style="padding:32px;text-align:center;color:var(--text-muted);font-size:14px">Loading favorites...</div>
+            </div>
+        </div>
+
+        <!-- History View -->
+        <div id="lib-view-history" class="lib-view" style="display: none;">
+            <div id="history-list">
+                <div style="padding:32px;text-align:center;color:var(--text-muted);font-size:14px">Loading history...</div>
             </div>
         </div>
 
@@ -183,8 +191,8 @@
           
           <div class="setting-row">
             <div class="setting-info">
-              <div class="setting-title">Enable Spotify Playback</div>
-              <div class="setting-desc">Allow users to search and queue Spotify links.</div>
+              <div class="setting-title">Owner Spotify Sync</div>
+              <div class="setting-desc">Admin-only account integration. Requires Docker opt-in and can expose account activity. Audio uses YouTube fallback; direct Spotify rebroadcast is not enabled in this hardened build.</div>
             </div>
             <label class="switch">
               <input type="checkbox" id="toggle-spotify-playback" onchange="toggleSpotifyPlayback(this.checked)">
@@ -195,7 +203,7 @@
           <div class="setting-row">
             <div class="setting-info">
               <div class="setting-title">Spotify Jam (Autoplay)</div>
-              <div class="setting-desc">Automatically play recommended Spotify tracks when the queue is empty.</div>
+              <div class="setting-desc">Follow the instance owner's Spotify autoplay. Only available with direct playback.</div>
             </div>
             <label class="switch">
               <input type="checkbox" id="toggle-spotify-jam" onchange="toggleSpotifyJam(this.checked)">
@@ -243,14 +251,14 @@
   <div class="modal-content" style="max-width: 480px; text-align: left; padding: 24px;">
     <h3 style="margin-bottom: 8px; font-size: 18px; color: var(--text);">YouTube Authentication</h3>
     <p style="font-size: 13px; color: var(--text-sub); margin-bottom: 16px; line-height: 1.5;">
-      Upload or paste the instance's exported <code>cookies.txt</code>. Use a dedicated account and only upload over HTTPS.
+      Upload or paste an instance-owned <code>cookies.txt</code> only when a video requires an account. Use a dedicated account, export only YouTube/Google cookies, and upload only over HTTPS. Google OAuth cannot replace this file.
     </p>
 
     <!-- File Upload -->
     <div style="border: 2px dashed var(--border); border-radius: 8px; padding: 20px; text-align: center; margin-bottom: 16px; background: var(--surface);">
       <div style="font-size: 24px; margin-bottom: 8px;">📄</div>
       <div style="font-size: 14px; font-weight: 500; margin-bottom: 4px;">Choose a cookies.txt file</div>
-      <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">Supports Netscape format exported from browser extension</div>
+      <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">Netscape format. Browser extensions can read all cookies they are granted, so prefer a temporary profile and remove the extension afterward.</div>
       <input type="file" id="yt-cookie-file-input" accept=".txt" style="display: none;" onchange="handleCookieFileUpload(event)">
       <button class="search-btn" onclick="document.getElementById('yt-cookie-file-input').click()">Browse File...</button>
     </div>

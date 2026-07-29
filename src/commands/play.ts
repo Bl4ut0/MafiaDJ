@@ -1,8 +1,7 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction, GuildMember } from 'discord.js';
+import { SlashCommandBuilder, ChatInputCommandInteraction, GuildMember, escapeMarkdown } from 'discord.js';
 import { resolveUrl } from '../sources/index';
 import PlayerManager from '../player/PlayerManager';
 import { joinVoiceChannel } from '@discordjs/voice';
-import { QueueItem } from '../types';
 
 export const command = {
     data: new SlashCommandBuilder()
@@ -39,15 +38,22 @@ export const command = {
 
             if (Array.isArray(result)) {
                 // Playlist
-                result.forEach(track => player.queue.enqueue(track));
-                await interaction.editReply(`✅ Added **${result.length}** tracks to the queue.`);
+                const added = player.queue.enqueueMany(result);
+                if (added === 0) {
+                    await interaction.editReply('The queue is full.');
+                    return;
+                }
+                await interaction.editReply(`Added **${added}** tracks to the queue${added < result.length ? ` (${result.length - added} skipped: queue full)` : ''}.`);
             } else {
                 // Single Track
-                player.queue.enqueue(result);
+                if (!player.queue.enqueue(result)) {
+                    await interaction.editReply('The queue is full.');
+                    return;
+                }
                 if (!player.currentTrack) {
-                    await interaction.editReply(`▶️ Now playing: **${result.title}**`);
+                    await interaction.editReply(`Now playing: **${escapeMarkdown(result.title)}**`);
                 } else {
-                    await interaction.editReply(`✅ Added to queue: **${result.title}**`);
+                    await interaction.editReply(`Added to queue: **${escapeMarkdown(result.title)}**`);
                 }
             }
 

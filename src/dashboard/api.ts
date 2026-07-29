@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { requireAuth, requireDJ, requireAdmin } from './middleware';
+import { requireAuth, requireDJ, requireAdmin, ensureCsrfToken } from './middleware';
 import { buildState } from './state';
 import PlayerManager from '../player/PlayerManager';
 import { config } from '../config';
@@ -12,6 +12,8 @@ import SpotifyAPI from '../spotify/SpotifyAPI';
 import { PersonalPlaylists } from '../database/PersonalPlaylists';
 import { joinVoiceChannel } from '@discordjs/voice';
 import client from '../bot/client';
+import { rateLimit } from './rateLimit';
+import { History } from '../database/History';
 
 export const apiRouter = Router();
 
@@ -23,6 +25,7 @@ apiRouter.get('/me', requireAuth, (req: Request, res: Response) => {
         username: s.username,
         avatar: s.avatar,
         role: s.role,
+        csrfToken: ensureCsrfToken(req),
     });
 });
 
@@ -36,7 +39,7 @@ apiRouter.get('/state', requireAuth, (_req: Request, res: Response) => {
 });
 
 // GET /api/search?q=...&source=youtube|spotify|all
-apiRouter.get('/search', requireAuth, async (req: Request, res: Response) => {
+apiRouter.get('/search', requireAuth, rateLimit('search', 30, 60_000), async (req: Request, res: Response) => {
     const q = (req.query.q as string)?.trim();
     const source = (req.query.source as string) ?? 'youtube';
 
@@ -44,8 +47,7 @@ apiRouter.get('/search', requireAuth, async (req: Request, res: Response) => {
     if (q.length > 200) return res.status(400).json({ error: 'Search query is too long' });
 
     try {
-        const player = PlayerManager.getPlayer(config.guildId);
-        const spotifyAllowed = player.spotifyPlaybackEnabled && !!process.env.SPOTIFY_CLIENT_ID;
+        const spotifyAllowed = !!config.spotifyClientId && !!config.spotifyClientSecret;
         
         let results: any[] = [];
         
@@ -61,7 +63,7 @@ apiRouter.get('/search', requireAuth, async (req: Request, res: Response) => {
         
         if ((source === 'all' || source === 'spotify') && spotifyAllowed) {
             try {
-                const spResults = await (SpotifyAPI as any).searchTracks?.(q, 5) || [];
+                const spResults = await SpotifyAPI.searchTracks(q, 5);
                 const mappedSp = spResults.map((t: any) => ({
                     url: t.external_urls?.spotify || `spotify:track:${t.id}`,
                     title: t.name,
@@ -84,7 +86,7 @@ apiRouter.get('/search', requireAuth, async (req: Request, res: Response) => {
 });
 
 // POST /api/play — add a URL or search result to the queue (DJ+)
-apiRouter.post('/play', requireDJ, async (req: Request, res: Response) => {
+apiRouter.post('/play', requireDJ, rateLimit('play', 20, 60_000), async (req: Request, res: Response) => {
     const { url } = req.body;
     const s = req.session as any;
     if (typeof url !== 'string' || url.length > 2_048) return res.status(400).json({ error: 'Invalid media URL' });
@@ -117,17 +119,18 @@ apiRouter.post('/play', requireDJ, async (req: Request, res: Response) => {
         }
         const result = await resolveUrl(url, s.userId);
         const tracks = Array.isArray(result) ? result : [result];
-        tracks.forEach(t => player.queue.enqueue(t));
+        const added = player.queue.enqueueMany(tracks);
+        if (added === 0) return res.status(409).json({ error: 'The queue is full.' });
         
         player.emit('stateChange');
         
         if (!player.currentTrack && !player.queue.isEmpty()) {
             player.playNext();
         }
-        res.json({ ok: true, added: tracks.length });
+        res.json({ ok: true, added, skipped: tracks.length - added });
     } catch (err: any) {
         logger.error(`[Dashboard API] Play error: ${err?.stack || err?.message || err}`);
-        res.status(500).json({ error: err?.message || 'Failed to queue track' });
+        res.status(500).json({ error: 'Failed to queue track. Check the server logs for details.' });
     }
 });
 
@@ -206,11 +209,21 @@ apiRouter.post('/queue/remove', requireAuth, (req: Request, res: Response) => {
 });
 
 // POST /api/settings/jam
-apiRouter.post('/settings/jam', requireAdmin, (req: Request, res: Response) => {
+apiRouter.post('/settings/jam', requireAdmin, async (req: Request, res: Response) => {
     try {
         const { enabled } = req.body;
+        if (typeof enabled !== 'boolean') return res.status(400).json({ error: 'enabled must be a boolean' });
+        if (enabled && (!config.spotifyOwnerSyncAvailable || !config.spotifyOwnerSyncRiskAcknowledged)) {
+            return res.status(409).json({ error: 'Spotify owner sync is not enabled in the server configuration.' });
+        }
         const player = PlayerManager.getPlayer(config.guildId);
-        if (enabled !== player.spotifyAutoplay) {
+        if (enabled && !player.spotifyOwnerSyncEnabled) {
+            return res.status(409).json({ error: 'Enable owner Spotify sync first.' });
+        }
+        if (enabled) {
+            const started = await player.startJam();
+            if (!started) return res.status(409).json({ error: 'Join a voice channel before enabling Jam sync.' });
+        } else if (player.spotifyAutoplay) {
             player.toggleSpotifyAutoplay();
         }
         res.json({ ok: true, enabled: player.spotifyAutoplay });
@@ -223,9 +236,13 @@ apiRouter.post('/settings/jam', requireAdmin, (req: Request, res: Response) => {
 apiRouter.post('/settings/spotify', requireAdmin, (req: Request, res: Response) => {
     try {
         const { enabled } = req.body;
+        if (typeof enabled !== 'boolean') return res.status(400).json({ error: 'enabled must be a boolean' });
+        if (enabled && (!config.spotifyOwnerSyncAvailable || !config.spotifyOwnerSyncRiskAcknowledged)) {
+            return res.status(409).json({ error: 'Spotify owner sync is unavailable. The server owner must configure and acknowledge it first.' });
+        }
         const player = PlayerManager.getPlayer(config.guildId);
-        player.setSpotifyPlaybackEnabled(!!enabled);
-        res.json({ ok: true, enabled: player.spotifyPlaybackEnabled });
+        player.setSpotifyOwnerSyncEnabled(enabled);
+        res.json({ ok: true, enabled: player.spotifyOwnerSyncEnabled });
     } catch (err) {
         res.status(500).json({ error: 'Failed to update settings' });
     }
@@ -352,6 +369,14 @@ apiRouter.get('/favorites', requireAuth, (req: Request, res: Response) => {
     }
 });
 
+apiRouter.get('/history', requireAuth, (req: Request, res: Response) => {
+    try {
+        res.json(History.getUserRecent(req.session.userId!, 100, 0));
+    } catch {
+        res.status(500).json({ error: 'Failed to fetch history' });
+    }
+});
+
 // GET /api/favorites/check?url=...
 apiRouter.get('/favorites/check', requireAuth, (req: Request, res: Response) => {
     try {
@@ -458,7 +483,7 @@ apiRouter.get('/youtube/status', requireAuth, (_req: Request, res: Response) => 
 });
 
 // POST /api/youtube/cookies { cookiesContent } (Admin only)
-apiRouter.post('/youtube/cookies', requireAdmin, (req: Request, res: Response) => {
+apiRouter.post('/youtube/cookies', requireAdmin, rateLimit('youtube-cookies', 5, 60 * 60 * 1000), (req: Request, res: Response) => {
     try {
         const { cookiesContent } = req.body;
         if (!cookiesContent || typeof cookiesContent !== 'string') {

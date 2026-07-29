@@ -3,6 +3,11 @@ import { getYtInfo } from './youtube'; // We'll update sources/youtube.ts to exp
 import { resolveSpotifyUrl } from '../spotify/SpotifyResolver';
 
 export async function resolveUrl(url: string, requesterId: string): Promise<QueueItem | QueueItem[]> {
+    const spotifyUri = url.match(/^spotify:(track|album|playlist):([a-zA-Z0-9]+)$/);
+    if (spotifyUri) {
+        url = `https://open.spotify.com/${spotifyUri[1]}/${spotifyUri[2]}`;
+    }
+
     let parsed: URL;
     try {
         parsed = new URL(url);

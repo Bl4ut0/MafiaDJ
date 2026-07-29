@@ -1,65 +1,93 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction, ActionRowBuilder, StringSelectMenuBuilder, EmbedBuilder } from 'discord.js';
+import { SlashCommandBuilder, ChatInputCommandInteraction, ActionRowBuilder, StringSelectMenuBuilder, EmbedBuilder, escapeMarkdown } from 'discord.js';
 import { searchYouTubeMultiple } from '../events/messageHandler';
+import SpotifyAPI from '../spotify/SpotifyAPI';
+import { config } from '../config';
+
+interface SearchChoice {
+    title: string;
+    url: string;
+    duration: string;
+    artist: string;
+    source: 'YouTube' | 'Spotify';
+}
 
 export const command = {
     data: new SlashCommandBuilder()
         .setName('search')
-        .setDescription('Search YouTube for a song')
+        .setDescription('Search YouTube and Spotify for a song')
         .addStringOption(option =>
             option.setName('query')
                 .setDescription('What to search for')
-                .setRequired(true)),
+                .setMaxLength(200)
+                .setRequired(true))
+        .addStringOption(option =>
+            option.setName('source')
+                .setDescription('Catalog to search')
+                .addChoices(
+                    { name: 'All', value: 'all' },
+                    { name: 'YouTube', value: 'youtube' },
+                    { name: 'Spotify', value: 'spotify' }
+                )),
     async execute(interaction: ChatInputCommandInteraction) {
-        // Use ephemeral reply to keep search private
         await interaction.deferReply({ ephemeral: true });
-
         const query = interaction.options.getString('query', true);
+        const source = interaction.options.getString('source') || 'all';
 
         try {
-            // Search for top 5 results
-            const results = await searchYouTubeMultiple(query, 5);
+            const results: SearchChoice[] = [];
+            if (source === 'all' || source === 'youtube') {
+                const youtube = await searchYouTubeMultiple(query, 5);
+                results.push(...youtube.map(item => ({
+                    title: item.title,
+                    url: item.url,
+                    duration: item.duration,
+                    artist: item.channel,
+                    source: 'YouTube' as const,
+                })));
+            }
+            if ((source === 'all' || source === 'spotify') && config.spotifyClientId && config.spotifyClientSecret) {
+                const spotify = await SpotifyAPI.searchTracks(query, 5);
+                results.push(...spotify.map(item => ({
+                    title: item.name,
+                    url: item.external_urls.spotify,
+                    duration: `${Math.floor(item.duration_ms / 60_000)}:${String(Math.floor(item.duration_ms / 1000) % 60).padStart(2, '0')}`,
+                    artist: item.artists.map(artist => artist.name).join(', '),
+                    source: 'Spotify' as const,
+                })));
+            }
 
-            if (!results || results.length === 0) {
-                await interaction.editReply('❌ No results found.');
-                // Auto-delete error
-                setTimeout(() => { interaction.deleteReply().catch(() => { }); }, 8000);
+            if (results.length === 0) {
+                await interaction.editReply(source === 'spotify'
+                    ? 'Spotify search is unavailable or returned no results.'
+                    : 'No results found.');
                 return;
             }
 
+            const choices = results.slice(0, 10);
             const embed = new EmbedBuilder()
                 .setColor('#7C3AED')
-                .setTitle(`🔍 Search Results`)
-                .setDescription(`Requested by <@${interaction.user.id}>\n\n` +
-                    results.map((r, i) => `**${i + 1}.** [${r.title}](${r.url})\n　　⏱ ${r.duration} • ${r.channel}`).join('\n\n'))
-                .setFooter({ text: 'Select a track below • Auto-expires in 60s' });
+                .setTitle('Search Results')
+                .setDescription(choices.map((item, index) =>
+                    `**${index + 1}.** [${escapeMarkdown(item.title)}](${item.url})\n${item.source} - ${escapeMarkdown(item.artist)} - ${item.duration}`
+                ).join('\n\n'))
+                .setFooter({ text: 'Spotify selections use YouTube audio fallback.' });
 
-            // Use the same custom ID format as the working text-search: quicksearch:select:USER_ID
             const selectMenu = new StringSelectMenuBuilder()
-                .setCustomId(`quicksearch:select:${interaction.user.id}`)
-                .setPlaceholder('Pick a track to play')
-                .addOptions(results.map((r, i) => ({
-                    label: `${i + 1}. ${r.title}`.substring(0, 100),
-                    description: `${r.duration} • ${r.channel}`.substring(0, 100),
-                    value: r.url
+                .setCustomId(`search_select:${interaction.user.id}`)
+                .setPlaceholder('Choose a track')
+                .addOptions(choices.map((item, index) => ({
+                    label: `${index + 1}. ${item.title}`.slice(0, 100),
+                    description: `${item.source} - ${item.artist}`.slice(0, 100),
+                    value: item.url.slice(0, 100),
                 })));
 
-            const row = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(selectMenu);
-
             await interaction.editReply({
-                content: '', // Clear any loading text
                 embeds: [embed],
-                components: [row as any]
+                components: [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(selectMenu) as any],
             });
-
-            // Auto-cleanup after 60 seconds (matching message handler behavior)
-            setTimeout(() => {
-                interaction.deleteReply().catch(() => { });
-            }, 60000);
-
         } catch (error) {
             console.error('Search error:', error);
-            await interaction.editReply('❌ Search failed. Please try again.');
+            await interaction.editReply('Search failed. Please try again shortly.');
         }
-    }
+    },
 };
-

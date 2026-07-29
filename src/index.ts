@@ -6,6 +6,10 @@ import { loadCommands } from './commands';
 import { handleInteraction } from './events/interactionCreate';
 import { logger } from './utils/logger';
 import { startDashboard } from './dashboard/server';
+import { handleMessage } from './events/messageHandler';
+import { handleVoiceStateUpdate } from './events/voiceStateHandler';
+import { startPlayerHealthCheck } from './events/playerHealthCheck';
+import ready from './events/ready';
 
 async function main() {
     try {
@@ -14,17 +18,20 @@ async function main() {
         // Initialize Database
         initDatabase();
 
-        // Start Web Dashboard Server
-        startDashboard();
-
         // Load Commands
         await loadCommands();
 
         // Register Events
         client.on(Events.InteractionCreate, handleInteraction);
+        client.on(Events.MessageCreate, handleMessage);
+        client.on(Events.VoiceStateUpdate, handleVoiceStateUpdate);
+        client.once(Events.ClientReady, () => {
+            startDashboard();
+            startPlayerHealthCheck();
+        });
 
         // Ready event
-        import('./events/ready').then(module => module.default(client));
+        ready(client);
 
         // Global Error Handling
         process.on('unhandledRejection', (error) => {

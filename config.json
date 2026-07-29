@@ -8,8 +8,7 @@
         "defaultVolume": 50,
         "maxQueueLength": 200,
         "maxDurationSeconds": 10800,
-        "duplicatePrevention": false,
-        "spotifyMode": "librespot"
+        "duplicatePrevention": false
     },
     "voice": {
         "autoDisconnectSeconds": 300,
@@ -23,7 +22,6 @@
     "paths": {
         "ytdlp": "yt-dlp",
         "ffmpeg": "ffmpeg",
-        "librespot": "librespot",
         "database": "./data/mafiadj.db"
     }
 }

@@ -1,96 +1,120 @@
-import { ButtonInteraction, Interaction } from 'discord.js';
+import { ButtonInteraction, GuildMember } from 'discord.js';
 import PlayerManager from '../player/PlayerManager';
 import { ControllerMessage } from '../ui/ControllerMessage';
 import { Favorites } from '../database/Favorites';
 import { LibraryManager } from '../ui/library/LibraryManager';
+import { PermissionManager, UserRole } from '../permissions/PermissionManager';
+import VoteManager from '../permissions/VoteManager';
+
+const DJ_ONLY_ACTIONS = new Set(['loop', 'shuffle', 'vol_up', 'vol_down']);
 
 export async function handleButtonInteraction(interaction: ButtonInteraction, controller: ControllerMessage) {
-    const customId = interaction.customId;
+    if (!interaction.customId.startsWith('controller:') || !interaction.guildId || !interaction.guild) return;
 
-    // Safety check
-    if (!customId.startsWith('controller:')) return;
-
-    const action = customId.split(':')[1];
-    const player = PlayerManager.getPlayer(interaction.guildId!);
-
-    if (!player) {
-        // Should ideally check if player exists before interacting, but controller persists.
-        // If no player active but controller exists, some buttons might fail.
-        // However, 'play' isn't on controller.
-        await interaction.reply({ content: 'Player not active.', ephemeral: true });
-        return;
-    }
+    const action = interaction.customId.split(':')[1];
+    const player = PlayerManager.getPlayer(interaction.guildId);
 
     try {
-        // Handle non-deferrable actions first? 
-        // Actually, deferUpdate confirms reception. 
-        // BUT for 'like' and 'favorites' we send followUps.
-
-        switch (action) {
-            case 'pause':
-                await interaction.deferUpdate();
-                if (player.audioPlayer.state.status === 'paused') {
-                    player.resume();
-                } else {
-                    player.pause();
-                }
-                break;
-            case 'skip':
-                await interaction.deferUpdate();
-                player.playNext();
-                break;
-            case 'stop':
-                await interaction.deferUpdate();
-                player.stop();
-                if (player.connection) {
-                    player.connection.destroy();
-                    player.connection = null;
-                }
-                break;
-            case 'loop':
-                await interaction.deferUpdate();
-                player.isLooping = !player.isLooping;
-                break;
-            case 'shuffle':
-                await interaction.deferUpdate();
-                player.queue.shuffle();
-                break;
-            case 'vol_up':
-                await interaction.deferUpdate();
-                player.setVolume(player.volume + 10);
-                break;
-            case 'vol_down':
-                await interaction.deferUpdate();
-                player.setVolume(player.volume - 10);
-                break;
-            case 'like':
-                // Don't defer update here because we want to reply with ephemeral success
-                // Actually we can deferUpdate AND followUp ephemeral.
-                await interaction.deferUpdate();
-                if (player.currentTrack) {
-                    const success = Favorites.add(interaction.user.id, player.currentTrack);
-                    if (success) {
-                        await interaction.followUp({ content: `❤️ **Added to Favorites:** ${player.currentTrack.title}`, ephemeral: true });
-                    } else {
-                        await interaction.followUp({ content: `⚠️ **Already in Favorites:** ${player.currentTrack.title}`, ephemeral: true });
-                    }
-                } else {
-                    await interaction.followUp({ content: 'Nothing playing to like!', ephemeral: true });
-                }
-                break;
-            case 'favorites':
-                await interaction.deferUpdate(); // Acknowledge button click on controller
-                await interaction.followUp({ content: '📬 Opening library in DMs...', ephemeral: true });
-                await LibraryManager.openLibrary(interaction.user);
-                break;
-            case 'prev':
-                await interaction.deferUpdate();
-                break;
+        if (action === 'like') {
+            await interaction.deferUpdate();
+            if (!player.currentTrack) {
+                await interaction.followUp({ content: 'Nothing is playing.', ephemeral: true });
+            } else {
+                const added = Favorites.add(interaction.user.id, player.currentTrack);
+                await interaction.followUp({
+                    content: added
+                        ? `Added to favorites: **${player.currentTrack.title}**`
+                        : `Already in favorites: **${player.currentTrack.title}**`,
+                    ephemeral: true,
+                });
+            }
+            return;
         }
 
-        // Update controller state
+        if (action === 'favorites') {
+            await interaction.deferUpdate();
+            await interaction.followUp({ content: 'Opening your library in DMs...', ephemeral: true });
+            await LibraryManager.openLibrary(interaction.user);
+            return;
+        }
+
+        const member = await interaction.guild.members.fetch(interaction.user.id);
+        const memberChannel = member.voice.channel;
+        const botChannelId = player.connection?.joinConfig.channelId;
+        if (!memberChannel || !botChannelId || memberChannel.id !== botChannelId) {
+            await interaction.reply({
+                content: 'Join the bot in its voice channel before using playback controls.',
+                ephemeral: true,
+            });
+            return;
+        }
+
+        const role = PermissionManager.getUserRole(member);
+        const privileged = role === UserRole.Admin || role === UserRole.DJ;
+        if (DJ_ONLY_ACTIONS.has(action) && !privileged) {
+            await interaction.reply({ content: 'Only DJs and administrators can use that control.', ephemeral: true });
+            return;
+        }
+
+        if (['pause', 'skip', 'stop'].includes(action) && !privileged) {
+            const voteAction = action === 'pause' && player.audioPlayer.state.status === 'paused'
+                ? 'resume'
+                : action as 'pause' | 'skip' | 'stop';
+            const result = await VoteManager.requestVote(
+                interaction.guildId,
+                member as GuildMember,
+                voteAction,
+                memberChannel,
+                () => executePlaybackAction(action, player)
+            );
+            const message = result.type === 'error'
+                ? result.message
+                : result.type === 'started'
+                    ? `Vote started: ${(result as any).vote.votes.size}/${(result as any).vote.required}. Other listeners can press the same control to vote.`
+                    : result.type === 'updated'
+                        ? `Vote recorded: ${(result as any).vote.votes.size}/${(result as any).vote.required}.`
+                        : 'Action approved.';
+            await interaction.reply({ content: message, ephemeral: true });
+            await controller.update();
+            return;
+        }
+
+        await interaction.deferUpdate();
+        executePlaybackAction(action, player);
         await controller.update();
     } catch (error) {
         console.error(`Error handling button ${action}:`, error);
+        const response = { content: 'That control could not be completed.', ephemeral: true };
+        if (interaction.replied || interaction.deferred) await interaction.followUp(response);
+        else await interaction.reply(response);
+    }
+}
+
+function executePlaybackAction(action: string, player: ReturnType<typeof PlayerManager.getPlayer>): void {
+    switch (action) {
+        case 'pause':
+            player.audioPlayer.state.status === 'paused' ? player.resume() : player.pause();
+            break;
+        case 'skip':
+            player.playNext();
+            break;
+        case 'stop':
+            player.stop();
+            player.connection?.destroy();
+            player.connection = null;
+            break;
+        case 'loop':
+            player.cycleLoopMode();
+            break;
+        case 'shuffle':
+            player.queue.shuffle();
+            player.emit('stateChange');
+            break;
+        case 'vol_up':
+            player.setVolume(player.volume + 10);
+            break;
+        case 'vol_down':
+            player.setVolume(player.volume - 10);
+            break;
     }
 }

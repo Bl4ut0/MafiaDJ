@@ -6,6 +6,14 @@ let state = null;
 let ws = null;
 let isDJ = false;
 let searchSource = 'youtube';
+let csrfToken = '';
+
+function jsonHeaders() {
+    return {
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': csrfToken,
+    };
+}
 
 // ── Progress interpolation ──────────────────────────────────────────────────
 let serverElapsed = 0;
@@ -78,13 +86,13 @@ function applyState(s) {
     const jamToggle = document.getElementById('toggle-spotify-jam');
     if (jamToggle) {
         jamToggle.checked = s.spotifyAutoplay;
-        jamToggle.disabled = !s.spotifyEnabled || !s.spotifyPlaybackEnabled;
+        jamToggle.disabled = !s.spotifyEnabled || !s.spotifyOwnerSyncEnabled;
     }
     
     const playbackToggle = document.getElementById('toggle-spotify-playback');
     if (playbackToggle) {
-        playbackToggle.checked = s.spotifyPlaybackEnabled;
-        playbackToggle.disabled = !s.spotifyEnabled;
+        playbackToggle.checked = s.spotifyOwnerSyncEnabled;
+        playbackToggle.disabled = !s.spotifyOwnerSyncAvailable || !s.spotifyOwnerSyncRiskAcknowledged;
     }
     
     if (isDJ && !s.isConnected) {
@@ -175,7 +183,7 @@ function applyState(s) {
 
     // Sync settings toggles
     const togglePlayback = document.getElementById('toggle-spotify-playback');
-    if (togglePlayback) togglePlayback.checked = !!s.spotifyPlaybackEnabled;
+    if (togglePlayback) togglePlayback.checked = !!s.spotifyOwnerSyncEnabled;
     const toggleJam = document.getElementById('toggle-spotify-jam');
     if (toggleJam) toggleJam.checked = !!s.spotifyAutoplay;
 
@@ -199,11 +207,11 @@ async function checkFavoriteStatus() {
 }
 
 async function toggleFavorite() {
-    if (!state?.currentTrack || !isDJ) return;
+    if (!state?.currentTrack) return;
     try {
         const res = await fetch('/api/favorites/toggle', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: jsonHeaders(),
             body: JSON.stringify(state.currentTrack)
         });
         if (res.ok) {
@@ -266,6 +274,7 @@ async function init() {
             return;
         }
         user = await res.json();
+        csrfToken = user.csrfToken || '';
         isDJ = user.role === 'dj' || user.role === 'admin';
 
         // Update UI with user info
@@ -297,8 +306,9 @@ async function init() {
         connectWS();
 
         // Load Library
-        loadFavorites();
-        loadPlaylists();
+        await loadPlaylists();
+        await loadFavorites();
+        await loadHistory();
         
         // Load voice channels
         if (isDJ) {
@@ -310,6 +320,17 @@ async function init() {
 
     } catch (err) {
         console.error('[MafiaDJ] Init error:', err);
+    }
+}
+
+async function logout() {
+    try {
+        await fetch('/auth/logout', {
+            method: 'POST',
+            headers: { 'X-CSRF-Token': csrfToken },
+        });
+    } finally {
+        location.href = '/';
     }
 }
 
@@ -334,7 +355,7 @@ async function removeFromQueue(index) {
     try {
         const res = await fetch('/api/queue/remove', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: jsonHeaders(),
             body: JSON.stringify({ index }),
         });
         if (!res.ok) {
@@ -356,7 +377,7 @@ async function toggleSpotifyJam(enabled) {
     try {
         const res = await fetch('/api/settings/jam', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: jsonHeaders(),
             body: JSON.stringify({ enabled }),
         });
         if (res.ok) {
@@ -380,7 +401,7 @@ async function toggleSpotifyPlayback(enabled) {
     try {
         const res = await fetch('/api/settings/spotify', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: jsonHeaders(),
             body: JSON.stringify({ enabled }),
         });
         if (res.ok) {
@@ -433,7 +454,7 @@ async function saveCookieContent(content) {
     try {
         const res = await fetch('/api/youtube/cookies', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: jsonHeaders(),
             body: JSON.stringify({ cookiesContent: content })
         });
         const data = await res.json();
@@ -483,7 +504,7 @@ async function apiPost(endpoint, body = {}) {
     try {
         const res = await fetch(endpoint, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: jsonHeaders(),
             body: JSON.stringify(body),
         });
         if (!res.ok) {
@@ -550,6 +571,9 @@ async function loadFavorites() {
             list.innerHTML = '<div style="padding:32px;text-align:center;color:var(--text-muted)">No favorites yet. Click the 🤍 icon on the player to add some.</div>';
             return;
         }
+        const playlistOptions = libraryPlaylists
+            .map(p => `<option value="${p.id}">${escHtml(p.name)}</option>`)
+            .join('');
         list.innerHTML = data.map(r => `
             <div class="result-item">
               <img class="result-thumb" src="${escAttr(r.thumbnail)}" alt="" onerror="this.style.display='none'">
@@ -557,6 +581,10 @@ async function loadFavorites() {
                 <div class="result-title">${escHtml(r.title)}</div>
                 <div class="result-sub">${escHtml(r.artist)}</div>
               </div>
+              <select aria-label="Add to playlist" style="max-width:140px;background:var(--surface);color:var(--text);border:1px solid var(--border);padding:6px" onchange="addFavoriteToPlaylist(${r.id}, this.value); this.value=''">
+                <option value="">Add to playlist...</option>
+                ${playlistOptions}
+              </select>
               <span class="result-add" onclick="addToQueue(${jsArg(r.url)})">▶</span>
             </div>
         `).join('');
@@ -565,11 +593,38 @@ async function loadFavorites() {
     }
 }
 
+async function loadHistory() {
+    const list = document.getElementById('history-list');
+    try {
+        const res = await fetch('/api/history');
+        const data = await res.json();
+        if (!data || data.length === 0) {
+            list.innerHTML = '<div style="padding:32px;text-align:center;color:var(--text-muted)">No playback history yet.</div>';
+            return;
+        }
+        list.innerHTML = data.map(r => `
+            <div class="result-item">
+              <img class="result-thumb" src="${escAttr(r.thumbnail)}" alt="" onerror="this.style.display='none'">
+              <div class="result-info" onclick="addToQueue(${jsArg(r.url)})">
+                <div class="result-title">${escHtml(r.title)}</div>
+                <div class="result-sub">${escHtml(r.artist || '')}</div>
+              </div>
+              <button class="result-add" onclick="addToQueue(${jsArg(r.url)})" title="Queue track">+</button>
+            </div>
+        `).join('');
+    } catch {
+        list.innerHTML = '<div style="padding:32px;text-align:center;color:var(--red)">Failed to load history.</div>';
+    }
+}
+
+let libraryPlaylists = [];
+
 async function loadPlaylists() {
     const list = document.getElementById('playlists-list');
     try {
         const res = await fetch('/api/playlists');
         const data = await res.json();
+        libraryPlaylists = Array.isArray(data) ? data : [];
         if (!data || data.length === 0) {
             list.innerHTML = '<div style="padding:32px;text-align:center;color:var(--text-muted)">No playlists yet. Create one above!</div>';
             return;
@@ -587,6 +642,17 @@ async function loadPlaylists() {
     }
 }
 
+async function addFavoriteToPlaylist(favoriteId, playlistId) {
+    if (!playlistId) return;
+    const res = await fetch(`/api/playlists/${playlistId}/add`, {
+        method: 'POST',
+        headers: jsonHeaders(),
+        body: JSON.stringify({ favoriteId }),
+    });
+    const data = await res.json().catch(() => ({}));
+    showToast(res.ok ? 'Added to playlist' : (data.error || 'Could not add to playlist'));
+}
+
 async function createPlaylist() {
     const input = document.getElementById('new-playlist-name');
     const name = input.value.trim();
@@ -594,11 +660,12 @@ async function createPlaylist() {
     try {
         await fetch('/api/playlists', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: jsonHeaders(),
             body: JSON.stringify({ name })
         });
         input.value = '';
-        loadPlaylists();
+        await loadPlaylists();
+        await loadFavorites();
     } catch (err) { alert('Failed to create playlist'); }
 }
 
@@ -777,6 +844,8 @@ window.openSearchModal = openSearchModal;
 window.createPlaylist = createPlaylist;
 window.openPlaylist = openPlaylist;
 window.playPlaylist = playPlaylist;
+window.logout = logout;
+window.addFavoriteToPlaylist = addFavoriteToPlaylist;
 
 // ── Boot ─────────────────────────────────────────────────────────────────────
 init();

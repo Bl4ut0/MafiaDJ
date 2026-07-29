@@ -23,6 +23,11 @@ class VoteManager {
         voiceChannel: VoiceBasedChannel,
         executeCallback: () => void
     ) {
+        const existingVote = this.votes.get(guildId);
+        if (existingVote && existingVote.expires <= Date.now()) {
+            this.votes.delete(guildId);
+        }
+
         // 1. Check if user is alone with bot (Instant action)
         // Filter bots out of count
         const humanMembers = voiceChannel.members.filter(m => !m.user.bot);
@@ -74,6 +79,13 @@ class VoteManager {
     public castVote(guildId: string, member: GuildMember, executeCallback: () => void) {
         const vote = this.votes.get(guildId);
         if (!vote) return { type: 'error', message: 'No active vote.' };
+        if (vote.expires <= Date.now()) {
+            this.votes.delete(guildId);
+            return { type: 'error', message: 'That vote expired. Press the control again to start a new vote.' };
+        }
+        if (member.voice.channelId !== vote.voiceChannelId) {
+            return { type: 'error', message: 'Join the bot voice channel before voting.' };
+        }
 
         if (vote.votes.has(member.id)) {
             return { type: 'error', message: 'You have already voted.' };

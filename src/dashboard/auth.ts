@@ -3,19 +3,33 @@ import { config } from '../config';
 import { logger } from '../utils/logger';
 import crypto from 'crypto';
 import { getDashboardRole } from './roles';
+import { ensureCsrfToken } from './middleware';
+import { rateLimit } from './rateLimit';
 
 export const authRouter = Router();
 
 const DISCORD_API = 'https://discord.com/api/v10';
 const OAUTH_SCOPES = 'identify guilds.members.read';
+const oauthRateLimit = rateLimit('oauth', 20, 10 * 60 * 1000);
+
+function redirectUri(): string {
+    return process.env.DASHBOARD_REDIRECT_URI
+        || `http://localhost:${process.env.PORT || process.env.DASHBOARD_PORT || 3000}/auth/callback`;
+}
+
+function regenerateSession(req: Request): Promise<void> {
+    return new Promise((resolve, reject) => {
+        req.session.regenerate(error => error ? reject(error) : resolve());
+    });
+}
 
 // GET /auth/login — redirect to Discord OAuth2
-authRouter.get('/login', (req: Request, res: Response) => {
+authRouter.get('/login', oauthRateLimit, (req: Request, res: Response) => {
     const state = crypto.randomBytes(32).toString('hex');
-    (req.session as any).oauthState = state;
+    req.session.oauthState = state;
     const params = new URLSearchParams({
         client_id: config.discordClientId,
-        redirect_uri: process.env.DASHBOARD_REDIRECT_URI || `http://localhost:${process.env.PORT || process.env.DASHBOARD_PORT || 3000}/auth/callback`,
+        redirect_uri: redirectUri(),
         response_type: 'code',
         scope: OAUTH_SCOPES,
         state,
@@ -24,7 +38,7 @@ authRouter.get('/login', (req: Request, res: Response) => {
 });
 
 // GET /auth/callback — exchange code, verify guild membership, store session
-authRouter.get('/callback', async (req: Request, res: Response) => {
+authRouter.get('/callback', oauthRateLimit, async (req: Request, res: Response) => {
     const code = req.query.code as string;
     const state = req.query.state as string;
     const session = req.session as any;
@@ -34,21 +48,28 @@ authRouter.get('/callback', async (req: Request, res: Response) => {
     delete session.oauthState;
 
     try {
+        const clientSecret = process.env.DISCORD_CLIENT_SECRET;
+        if (!clientSecret) {
+            logger.error('[Dashboard Auth] DISCORD_CLIENT_SECRET is not configured.');
+            return res.redirect('/auth/error?msg=Dashboard+OAuth+is+not+configured');
+        }
+
         // 1. Exchange code for access token
         const tokenRes = await fetch(`${DISCORD_API}/oauth2/token`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             body: new URLSearchParams({
                 client_id: config.discordClientId,
-                client_secret: process.env.DISCORD_CLIENT_SECRET || '',
+                client_secret: clientSecret,
                 grant_type: 'authorization_code',
                 code,
-                redirect_uri: process.env.DASHBOARD_REDIRECT_URI || `http://localhost:${process.env.PORT || process.env.DASHBOARD_PORT || 3000}/auth/callback`,
+                redirect_uri: redirectUri(),
             }),
+            signal: AbortSignal.timeout(10_000),
         });
 
         if (!tokenRes.ok) {
-            logger.warn('[Dashboard Auth] Token exchange failed:', await tokenRes.text());
+            logger.warn(`[Dashboard Auth] Token exchange failed with status ${tokenRes.status}.`);
             return res.redirect('/auth/error?msg=Token+exchange+failed');
         }
 
@@ -58,6 +79,7 @@ authRouter.get('/callback', async (req: Request, res: Response) => {
         // 2. Get user info
         const userRes = await fetch(`${DISCORD_API}/users/@me`, {
             headers: { Authorization: `Bearer ${accessToken}` },
+            signal: AbortSignal.timeout(10_000),
         });
         if (!userRes.ok) return res.redirect('/auth/error?msg=Failed+to+get+user+info');
         const user: any = await userRes.json();
@@ -65,6 +87,7 @@ authRouter.get('/callback', async (req: Request, res: Response) => {
         // 3. Check guild membership
         const memberRes = await fetch(`${DISCORD_API}/users/@me/guilds/${config.guildId}/member`, {
             headers: { Authorization: `Bearer ${accessToken}` },
+            signal: AbortSignal.timeout(10_000),
         });
 
         if (!memberRes.ok) {
@@ -78,12 +101,14 @@ authRouter.get('/callback', async (req: Request, res: Response) => {
         const role = await getDashboardRole(user.id);
 
         // 5. Store in session
-        session.userId = user.id;
-        session.username = user.username;
-        session.discriminator = user.discriminator;
-        session.avatar = user.avatar;
-        session.role = role;
-        session.lastRoleCheck = Date.now();
+        await regenerateSession(req);
+        req.session.userId = user.id;
+        req.session.username = user.username;
+        req.session.discriminator = user.discriminator;
+        req.session.avatar = user.avatar;
+        req.session.role = role;
+        req.session.lastRoleCheck = Date.now();
+        ensureCsrfToken(req);
 
         logger.info(`[Dashboard] Login: ${user.username} (${user.id}) role=${role}`);
         res.redirect('/');
@@ -95,7 +120,7 @@ authRouter.get('/callback', async (req: Request, res: Response) => {
 });
 
 // GET /auth/logout
-authRouter.get('/logout', (req: Request, res: Response) => {
+authRouter.post('/logout', (req: Request, res: Response) => {
     req.session.destroy(() => res.redirect('/'));
 });
 
@@ -123,7 +148,7 @@ authRouter.get('/not-member', (_req: Request, res: Response) => {
     <div class="icon">🔒</div>
     <h1>Access Denied</h1>
     <p>This MafiaDJ instance is private.<br>You need to be a member of its Discord server to access it.</p>
-    <a href="/auth/logout">Back to Login</a>
+    <a href="/">Back to Login</a>
   </div>
 </body>
 </html>`);

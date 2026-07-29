@@ -54,7 +54,7 @@ export const command = {
         }
 
         // Queue all favorites
-        tracks.forEach(track => player.queue.enqueue(track));
+        const added = player.queue.enqueueMany(tracks);
 
         // Start playing if nothing is playing
         if (!player.currentTrack && !player.queue.isEmpty()) {
@@ -62,6 +62,6 @@ export const command = {
         }
 
         const emoji = subcommand === 'shuffle' ? '🔀' : '▶️';
-        await interaction.editReply(`${emoji} Queued **${tracks.length}** favorites${subcommand === 'shuffle' ? ' (shuffled)' : ''}.`);
+        await interaction.editReply(`${emoji} Queued **${added}** favorites${subcommand === 'shuffle' ? ' (shuffled)' : ''}${added < tracks.length ? ' (queue limit reached)' : ''}.`);
     }
 };

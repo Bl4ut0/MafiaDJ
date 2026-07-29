@@ -25,7 +25,9 @@ export interface DashboardState {
     serverName: string;
     serverIcon: string | null;
     spotifyEnabled: boolean;
-    spotifyPlaybackEnabled: boolean;
+    spotifyOwnerSyncEnabled: boolean;
+    spotifyOwnerSyncAvailable: boolean;
+    spotifyOwnerSyncRiskAcknowledged: boolean;
 }
 
 function resolveRequesterName(requesterId: string): string {
@@ -65,7 +67,9 @@ export function buildState(): DashboardState {
         isConnected: !!player.connection,
         serverName: guild?.name ?? '',
         serverIcon: guild?.iconURL({ extension: 'png', size: 64 }) ?? null,
-        spotifyEnabled: !!process.env.SPOTIFY_CLIENT_ID && !!process.env.SPOTIFY_CLIENT_SECRET,
-        spotifyPlaybackEnabled: (player as any).spotifyPlaybackEnabled ?? true,
+        spotifyEnabled: !!config.spotifyClientId && !!config.spotifyClientSecret,
+        spotifyOwnerSyncEnabled: player.spotifyOwnerSyncEnabled,
+        spotifyOwnerSyncAvailable: config.spotifyOwnerSyncAvailable,
+        spotifyOwnerSyncRiskAcknowledged: config.spotifyOwnerSyncRiskAcknowledged,
     };
 }

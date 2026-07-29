@@ -68,8 +68,8 @@ export class Favorites {
         return !!existing;
     }
 
-    public static getById(id: number): any {
-        return db.prepare('SELECT * FROM favorites WHERE id = ?').get(id) || null;
+    public static getById(id: number, userId: string): any {
+        return db.prepare('SELECT * FROM favorites WHERE id = ? AND user_id = ?').get(id, userId) || null;
     }
 
     /** Search favorites by title or artist (case-insensitive) */

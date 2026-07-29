@@ -29,7 +29,7 @@ export class MainView {
         const trackOptions = favorites.map((t: any, i) => ({
             label: `${offset + i + 1}. ${t.title.substring(0, 25)}`,
             description: t.artist.substring(0, 50),
-            value: `view_track:${t.url}` // Using URL as unique ID for now, ideally ID
+            value: String(t.id)
         }));
 
         const rows: any[] = [];
@@ -53,11 +53,11 @@ export class MainView {
                     .setDisabled(page <= 1),
                 new ButtonBuilder()
                     .setCustomId('lib:view:playlists')
-                    .setLabel('📂 Playlists')
+                    .setLabel('Playlists')
                     .setStyle(ButtonStyle.Primary),
                 new ButtonBuilder()
-                    .setCustomId('lib:search')
-                    .setLabel('🔍 Search')
+                    .setCustomId('lib:view:history')
+                    .setLabel('History')
                     .setStyle(ButtonStyle.Secondary),
                 new ButtonBuilder()
                     .setCustomId(`lib:page:${page + 1}`)

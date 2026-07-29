@@ -1,91 +1,102 @@
 import SpotifyWebApi from 'spotify-web-api-node';
 import { config } from '../config';
+import { logger } from '../utils/logger';
 
-// Singleton wrapper for Spotify Web API
 class SpotifyAPI {
     private static instance: SpotifyAPI;
-    private api: SpotifyWebApi;
-    private tokenExpirationEpoch: number = 0;
+    private metadataApi: SpotifyWebApi;
+    private userApi: SpotifyWebApi;
+    private metadataTokenExpiresAt = 0;
+    private userTokenExpiresAt = 0;
 
     private constructor() {
-        this.api = new SpotifyWebApi({
+        this.metadataApi = new SpotifyWebApi({
             clientId: config.spotifyClientId,
             clientSecret: config.spotifyClientSecret,
+        });
+        this.userApi = new SpotifyWebApi({
+            clientId: config.spotifyClientId,
+            clientSecret: config.spotifyClientSecret,
+            refreshToken: config.spotifyRefreshToken,
         });
     }
 
     public static getInstance(): SpotifyAPI {
-        if (!SpotifyAPI.instance) {
-            SpotifyAPI.instance = new SpotifyAPI();
-        }
+        if (!SpotifyAPI.instance) SpotifyAPI.instance = new SpotifyAPI();
         return SpotifyAPI.instance;
     }
 
-    private async ensureToken() {
-        // Refresh token if expired or about to expire (within 60s)
-        if (Date.now() / 1000 > this.tokenExpirationEpoch - 60) {
-            try {
-                const data = await this.api.clientCredentialsGrant();
-                this.api.setAccessToken(data.body['access_token']);
-                this.tokenExpirationEpoch = (Date.now() / 1000) + data.body['expires_in'];
-                console.log('[SpotifyAPI] Access token refreshed');
-            } catch (error) {
-                console.error('[SpotifyAPI] Error retrieving access token:', error);
-                throw error;
-            }
+    private ensureConfigured(): void {
+        if (!config.spotifyClientId || !config.spotifyClientSecret) {
+            throw new Error('Spotify metadata search is not configured.');
         }
     }
 
+    private async ensureMetadataToken(): Promise<void> {
+        this.ensureConfigured();
+        if (Date.now() < this.metadataTokenExpiresAt - 60_000) return;
+        const data = await this.metadataApi.clientCredentialsGrant();
+        this.metadataApi.setAccessToken(data.body.access_token);
+        this.metadataTokenExpiresAt = Date.now() + data.body.expires_in * 1000;
+    }
+
+    private async ensureUserToken(): Promise<void> {
+        if (!config.spotifyOwnerSyncAvailable || !config.spotifyOwnerSyncRiskAcknowledged || !config.spotifyRefreshToken) {
+            throw new Error('Spotify owner sync is not configured.');
+        }
+        if (Date.now() < this.userTokenExpiresAt - 60_000) return;
+        const data = await this.userApi.refreshAccessToken();
+        this.userApi.setAccessToken(data.body.access_token);
+        this.userTokenExpiresAt = Date.now() + data.body.expires_in * 1000;
+    }
+
     public async getTrack(trackId: string) {
-        await this.ensureToken();
-        const response = await this.api.getTrack(trackId);
-        return response.body;
+        await this.ensureMetadataToken();
+        return (await this.metadataApi.getTrack(trackId)).body;
     }
 
     public async getAlbum(albumId: string) {
-        await this.ensureToken();
-        const response = await this.api.getAlbum(albumId);
-        return response.body;
+        await this.ensureMetadataToken();
+        return (await this.metadataApi.getAlbum(albumId)).body;
     }
 
     public async getPlaylist(playlistId: string) {
-        await this.ensureToken();
-        const response = await this.api.getPlaylist(playlistId);
-        return response.body;
+        await this.ensureMetadataToken();
+        return (await this.metadataApi.getPlaylist(playlistId)).body;
     }
 
-    // Helper to start playback on a device (librespot)
-    public async playOnDevice(deviceId: string, trackUri: string) {
-        // Requires user authentication (authorization code grant) not client credentials.
-        // Librespot handles playback itself usually via being a Connect device.
-        // If we want to CONTROL it from the bot using the Web API, we need a user token.
-        // However, standard librespot usage for bots often just pipes audio.
-        // If using 'librespot --backend pipe', it just outputs audio when "something" plays on it.
-        // We can use the Spotify Web API to tell Spotify "Play Track X on Device Y".
-        // BUT this requires a User Access Token (authorized by the user), not Client Credentials.
+    public async searchTracks(query: string, limit = 5) {
+        await this.ensureMetadataToken();
+        const response = await this.metadataApi.searchTracks(query, {
+            limit: Math.max(1, Math.min(10, limit)),
+        });
+        return response.body.tracks?.items ?? [];
+    }
 
-        // Strategy: 
-        // 1. We start librespot with user/pass (it becomes a device).
-        // 2. We need a way to tell it to play. Librespot doesn't have a CLI for "play this" once running?
-        //    Actually, standard librespot is a receiver.
-        //    We need a controller. 
-        //    
-        // Alternative: Use a library that wraps librespot or acts as a controller? 
-        // Or simpler: We use `spotify-web-api-node` with a REFRESH TOKEN from the user account defined in .env.
-        // We'll need to do a one-time setup to get that refresh token or just use the username/password to get a token?
-        // Spotify doesn't support user/pass for API tokens directly anymore.
+    public async findDevice(deviceName: string): Promise<string | null> {
+        await this.ensureUserToken();
+        const response = await this.userApi.getMyDevices();
+        return response.body.devices.find(device => device.name === deviceName)?.id ?? null;
+    }
 
-        // Wait, the plan says:
-        // "Bot Start → Spawn librespot (--backend pipe) ... On /play → Send play command via Spotify Connect API"
-        // To use Spotify Connect API, we need a User Token.
-        // We can get a user token if we have the refresh token.
-        // We should add SPOTIFY_REFRESH_TOKEN to .env? Or handle the auth flow?
-        // For a personal bot, we can manually generate a refresh token once and put it in .env.
+    public async playOnDevice(deviceId: string, trackUri: string): Promise<void> {
+        await this.ensureUserToken();
+        await this.userApi.play({ device_id: deviceId, uris: [trackUri] });
+    }
 
-        // Let's assume for now we use the fallback "Spotify -> YouTube" method primarily if auth is hard, 
-        // but for "Direct Spotify" we need that user token.
+    public async getPlaybackState() {
+        await this.ensureUserToken();
+        return (await this.userApi.getMyCurrentPlaybackState()).body;
+    }
 
-        // Let's stick to Metadata resolution first.
+    public async pausePlayback(): Promise<void> {
+        await this.ensureUserToken();
+        try {
+            await this.userApi.pause();
+        } catch (error) {
+            logger.warn('[SpotifyAPI] Could not pause owner playback:', error);
+            throw error;
+        }
     }
 }
 

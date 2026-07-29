@@ -1,10 +1,9 @@
-import { Message, ActionRowBuilder, StringSelectMenuBuilder, EmbedBuilder, TextChannel, GuildMember, ButtonBuilder, ButtonStyle } from 'discord.js';
-import { spawn } from 'child_process';
-import { config } from '../config';
+import { Message, ActionRowBuilder, StringSelectMenuBuilder, TextChannel, GuildMember, ButtonBuilder, ButtonStyle, ButtonInteraction, StringSelectMenuInteraction, escapeMarkdown } from 'discord.js';
 import db from '../database/Database';
 import { resolveUrl } from '../sources/index';
 import PlayerManager from '../player/PlayerManager';
 import { joinVoiceChannel } from '@discordjs/voice';
+import { runYtDlp } from '../utils/ytdlp';
 
 interface SearchResult {
     title: string;
@@ -14,35 +13,34 @@ interface SearchResult {
 }
 
 /** Search YouTube for multiple results using yt-dlp */
-export function searchYouTubeMultiple(query: string, count: number = 5): Promise<SearchResult[]> {
-    return new Promise((resolve) => {
-        const ytDlpPath = config.paths?.ytdlp || 'yt-dlp';
-        const proc = spawn(ytDlpPath, [
-            '--print', '%(title)s\t%(webpage_url)s\t%(duration_string)s\t%(channel)s',
-            '--no-playlist',
+export async function searchYouTubeMultiple(query: string, count: number = 5): Promise<SearchResult[]> {
+    try {
+        const safeCount = Math.max(1, Math.min(10, count));
+        const { stdout } = await runYtDlp([
+            '--dump-json',
+            '--skip-download',
             '--flat-playlist',
-            `ytsearch${count}:${query}`
+            '--playlist-end', String(safeCount),
+            '--no-warnings',
+            `ytsearch${safeCount}:${query.slice(0, 200)}`,
         ]);
-
-        let output = '';
-        proc.stdout.on('data', (data) => { output += data.toString(); });
-
-        proc.on('close', (code) => {
-            if (code !== 0 || !output.trim()) {
-                resolve([]);
-                return;
+        return stdout.split(/\r?\n/).filter(Boolean).flatMap(line => {
+            try {
+                const item = JSON.parse(line);
+                const url = item.webpage_url || (item.id ? `https://www.youtube.com/watch?v=${item.id}` : '');
+                return url ? [{
+                    title: String(item.title || 'Unknown').slice(0, 300),
+                    url,
+                    duration: item.duration_string || String(item.duration || 0),
+                    channel: String(item.channel || item.uploader || 'Unknown').slice(0, 300),
+                }] : [];
+            } catch {
+                return [];
             }
-
-            const results = output.trim().split('\n').map(line => {
-                const [title, url, duration, channel] = line.split('\t');
-                return { title: title || 'Unknown', url: url || '', duration: duration || '?:??', channel: channel || 'Unknown' };
-            }).filter(r => r.url);
-
-            resolve(results);
         });
-
-        proc.on('error', () => resolve([]));
-    });
+    } catch {
+        return [];
+    }
 }
 
 /** Get the configured music_channel_id for a guild */
@@ -116,14 +114,21 @@ export async function handleMessage(message: Message) {
             const result = await resolveUrl(query, member.id);
 
             if (Array.isArray(result)) {
-                result.forEach(track => player.queue.enqueue(track));
-                await loadingMsg.edit(`✅ Added **${result.length}** tracks from playlist to queue.`);
+                const added = player.queue.enqueueMany(result);
+                if (added === 0) {
+                    await loadingMsg.edit('The queue is full.');
+                    return;
+                }
+                await loadingMsg.edit(`Added **${added}** playlist tracks${added < result.length ? ` (${result.length - added} skipped: queue full)` : ''}.`);
             } else {
-                player.queue.enqueue(result);
+                if (!player.queue.enqueue(result)) {
+                    await loadingMsg.edit('The queue is full.');
+                    return;
+                }
                 if (!player.currentTrack) {
-                    await loadingMsg.edit(`▶️ Now playing: **${result.title}**`);
+                    await loadingMsg.edit(`Now playing: **${escapeMarkdown(result.title)}**`);
                 } else {
-                    await loadingMsg.edit(`✅ Added to queue: **${result.title}**`);
+                    await loadingMsg.edit(`Added to queue: **${escapeMarkdown(result.title)}**`);
                 }
             }
 
@@ -155,12 +160,82 @@ export async function handleMessage(message: Message) {
         );
 
     const promptMsg = await channel.send({
-        content: `<@${message.author.id}>, click below to search for **"${query.substring(0, 50)}..."**`,
-        components: [buttonRow as any]
+        content: `<@${message.author.id}>, click below to search for **"${escapeMarkdown(query.substring(0, 50))}"**`,
+        components: [buttonRow as any],
+        allowedMentions: { users: [message.author.id] },
     });
 
     // Auto-delete the prompt after 30 seconds to keep channel clean
     setTimeout(() => {
         promptMsg.delete().catch(() => { });
     }, 30000);
+}
+
+export async function handleSearchInteraction(interaction: ButtonInteraction | StringSelectMenuInteraction) {
+    if (!interaction.guild || !interaction.guildId) return;
+
+    if (interaction.isButton() && interaction.customId.startsWith('search_start:')) {
+        const query = interaction.customId.slice('search_start:'.length).trim();
+        await interaction.deferReply({ ephemeral: true });
+        const results = await searchYouTubeMultiple(query, 5);
+        if (results.length === 0) {
+            await interaction.editReply('No playable YouTube results were found.');
+            return;
+        }
+        const menu = new StringSelectMenuBuilder()
+            .setCustomId(`search_select:${interaction.user.id}`)
+            .setPlaceholder('Choose a track')
+            .addOptions(results.map(result => ({
+                label: result.title.slice(0, 100),
+                description: `${result.channel} - ${result.duration}`.slice(0, 100),
+                value: result.url.slice(0, 100),
+            })));
+        await interaction.editReply({
+            content: `Results for **${escapeMarkdown(query.slice(0, 100))}**`,
+            components: [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(menu) as any],
+        });
+        return;
+    }
+
+    if (!interaction.isStringSelectMenu() || !interaction.customId.startsWith('search_select:')) return;
+    const ownerId = interaction.customId.slice('search_select:'.length);
+    if (ownerId !== interaction.user.id) {
+        await interaction.reply({ content: 'Run your own search to request a track.', ephemeral: true });
+        return;
+    }
+
+    const member = await interaction.guild.members.fetch(interaction.user.id);
+    const voiceChannel = member.voice.channel;
+    if (!voiceChannel) {
+        await interaction.reply({ content: 'Join a voice channel before requesting music.', ephemeral: true });
+        return;
+    }
+
+    await interaction.deferReply({ ephemeral: true });
+    const player = PlayerManager.getPlayer(interaction.guildId);
+    const connectedChannelId = player.connection?.joinConfig.channelId;
+    if (connectedChannelId && connectedChannelId !== voiceChannel.id) {
+        await interaction.editReply('The bot is already playing in another voice channel.');
+        return;
+    }
+
+    if (!player.connection) {
+        player.connection = joinVoiceChannel({
+            channelId: voiceChannel.id,
+            guildId: interaction.guildId,
+            adapterCreator: voiceChannel.guild.voiceAdapterCreator as any,
+        });
+        player.connection.subscribe(player.audioPlayer);
+    }
+
+    const resolved = await resolveUrl(interaction.values[0], interaction.user.id);
+    const tracks = Array.isArray(resolved) ? resolved : [resolved];
+    const added = player.queue.enqueueMany(tracks);
+    if (added === 0) {
+        await interaction.editReply('The queue is full.');
+        return;
+    }
+    if (!player.currentTrack) player.playNext();
+    player.emit('stateChange');
+    await interaction.editReply(`Queued **${tracks[0].title}**.`);
 }

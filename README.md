@@ -1,127 +1,128 @@
-# 🎵 MafiaDJ
+# MafiaDJ
 
-> **A high-quality, self-hosted Discord music bot for personal servers.**
+MafiaDJ is a self-hosted Discord music bot with a persistent controller, a
+Discord-authenticated web dashboard, YouTube playback, Spotify catalog search,
+and per-user favorites, history, and playlists.
 
-MafiaDJ is a robust, self-hosted music bot designed for high-fidelity playback from multiple sources. It features a persistent "Now Playing" controller, a personal music library system, and seamless Spotify integration.
+## Playback Model
 
-## ✨ Features
+- YouTube is the default audio source.
+- Spotify client credentials enable Spotify catalog and link metadata.
+- Spotify links resolve their metadata through Spotify and play a matching
+  YouTube result.
+- Owner Spotify Sync is optional, disabled by default, and admin-only. It reads
+  the instance owner's current Spotify playback/autoplay state and follows it
+  using YouTube audio fallback.
+- Direct Spotify audio rebroadcast through librespot is intentionally not
+  included. Spotify's current policy prohibits non-interactive webcasting to
+  multiple listeners and combining Spotify content with another service.
 
-- **Multi-Source Playback**: 
-  - **Spotify**: Direct streaming via `librespot` (Spotify Connect) for premium audio quality.
-  - **YouTube**: Video and playlist support with high-quality audio extraction.
-  - **SoundCloud**: Track and set support.
-  - **Direct URL**: Play valid audio files directly from the web.
-- **Interactive Controller**: A persistent, real-time updated message channel that acts as your music dashboard. Control playback with buttons (Pause, Skip, Loop, Shuffle, etc.).
-- **Personal Library**: Managing your music has never been easier. Use the `/library` command to open a private DM interface where you can manage your **Favorites** and **Playlists**.
-- **DJ System**: robust permission system. Assign a **DJ Role** for full control, while other users participate via a democratic **Voting System** for skips and stops.
-- **Self-Contained**: Runs entirely on your own hardware. No external premium subscriptions (other than your own Spotify Premium).
+Google OAuth cannot provide YouTube browser cookies or official audio relay
+access. Public YouTube playback should be tried without an account first.
 
----
+## Docker Setup
 
-## ⚠️ IMPORTANT DISCLAIMER: Spotify & Account Safety
+1. Copy `.env.example` to `.env` and set the three required Discord values.
+2. Keep `DASHBOARD_ENABLED=false` unless the dashboard is needed.
+3. Start the service:
 
-This bot utilizes `librespot` to interface with Spotify's servers. This library functions by emulating a Spotify Connect device (like a smart speaker). While this is a widely used library:
+```bash
+docker compose up --build -d
+```
 
-> **Use at your own risk.**
-> 
-> 1. We **do not** guarantee that your Spotify account will remain safe from potential restrictions or bans by Spotify.
-> 2. We **strongly recommend** using a dedicated **secondary Spotify account** for this bot. Do **NOT** use your main personal account if you cannot afford to lose it.
-> 3. The developers of MafiaDJ assume **no liability** for any account actions taken by Spotify against accounts used with this software.
+The Compose port is bound to host loopback at `127.0.0.1:3000`. Put an HTTPS
+reverse proxy in front before making the dashboard remotely accessible.
 
----
+For remote dashboard access:
 
-## 🚀 Installation & Setup
+```env
+DASHBOARD_ENABLED=true
+DASHBOARD_SESSION_SECRET=generate-at-least-32-random-characters
+DISCORD_CLIENT_SECRET=your-discord-oauth-client-secret
+DASHBOARD_REDIRECT_URI=https://music.example.com/auth/callback
+DASHBOARD_COOKIE_SECURE=true
+DASHBOARD_TRUST_PROXY=true
+```
 
-### Option A: Docker / Dockge Deployment (Recommended)
+Remove the Compose `DASHBOARD_ALLOW_INSECURE_HTTP` override when the container
+is exposed through a public network path.
 
-The recommended production setup is via **Docker Compose** or **Dockge**.
+## Spotify Search
 
-1. **Pull and Deploy via `docker-compose.yml`**:
-   ```yaml
-   version: '3.8'
+Spotify catalog search does not use a user's Spotify account:
 
-   services:
-     mafiadj:
-       image: bl4ut0/mafiadj:latest
-       container_name: mafiadj
-       restart: unless-stopped
-       ports:
-         - "3001:3000"  # Put an HTTPS reverse proxy in front for remote access.
-       env_file:
-         - .env
-       volumes:
-         - ./data:/app/data
-         - ./spotify_cache:/app/spotify_cache
-   ```
+```env
+SPOTIFY_CLIENT_ID=
+SPOTIFY_CLIENT_SECRET=
+```
 
-2. **Environment File (`.env`)**:
-   ```env
-   # Discord Configuration
-   DISCORD_TOKEN=your_bot_token
-   DISCORD_CLIENT_ID=your_client_id
-   GUILD_ID=your_guild_id
+When these are absent, YouTube continues to work and the Spotify search tab is
+hidden.
 
-   # Spotify Configuration (Web API)
-   SPOTIFY_CLIENT_ID=your_spotify_client_id
-   SPOTIFY_CLIENT_SECRET=your_spotify_client_secret
-   SPOTIFY_REFRESH_TOKEN=your_spotify_refresh_token
+## Owner Spotify Sync
 
-   # Web Dashboard Configuration
-   DASHBOARD_ENABLED=true
-   DASHBOARD_PORT=3000
-   DASHBOARD_SESSION_SECRET=generate_a_random_32_character_minimum_secret
-   DISCORD_CLIENT_SECRET=your_discord_client_secret
-   DASHBOARD_REDIRECT_URI=https://your-dashboard-domain/auth/callback
-   DASHBOARD_COOKIE_SECURE=true
-   DASHBOARD_TRUST_PROXY=true
+This capability uses one instance-owner account. Users do not link their own
+Spotify accounts. It is unavailable unless the server owner sets every value:
 
-   # Executable Paths (Docker)
-   YTDLP_PATH=yt-dlp
-   FFMPEG_PATH=ffmpeg
-   LIBRESPOT_PATH=librespot
+```env
+SPOTIFY_OWNER_SYNC_AVAILABLE=true
+SPOTIFY_OWNER_SYNC_RISK_ACKNOWLEDGED=true
+SPOTIFY_REFRESH_TOKEN=
+```
 
-   # Optional: allow direct media from only these HTTPS hosts.
-   DIRECT_MEDIA_HOSTS=media.example.com
+An administrator must still enable it in the dashboard or run `/jam`. Treat the
+refresh token as a password. This integration can expose the owner's listening
+activity and may create Spotify policy or account-enforcement risk.
 
-   LOG_LEVEL=info
-   ```
+## YouTube Authentication
 
-3. **Start the Container**:
-   ```bash
-   docker compose pull
-   docker compose up -d
-   ```
+Do not install a cookie extension as part of the server. Most public playback
+should work without cookies. A current yt-dlp PO-token provider can be configured
+with `YOUTUBE_POT_PROVIDER_URL`.
 
----
+For account-required videos only, an administrator may upload a Netscape
+`cookies.txt` through the dashboard. MafiaDJ filters the file to YouTube and
+Google domains and writes it with restrictive Unix permissions. Use a dedicated
+browser profile/account, upload only over HTTPS, and remove any cookie-export
+extension afterward.
 
-## 🎮 Usage Guide
+The host file still needs a restrictive Windows ACL. Run:
 
-### Discord Slash Commands
+```powershell
+.\scripts\harden-windows-secrets.ps1
+```
 
-Slash commands are **automatically registered** with Discord API on bot startup.
+## Local Development
 
-- **/setup**: Initialize the persistent controller channel (Admin only).
-- **/play <query|url>**: Add a song or playlist to the queue (YouTube, Spotify, SoundCloud).
-- **/search <query>**: Search YouTube and select a track.
-- **/library**: Open your personal music library in Discord DMs.
-- **/favorites play**: Quick-play all your liked songs.
-- **/queue**: View the current queue.
+The repository includes Windows binaries under `bin`. Bare executable names are
+resolved to that directory automatically on Windows.
 
-### Web Companion Dashboard (`http://your-server-ip:3001`)
+```powershell
+npm.cmd ci
+npm.cmd test
+npm.cmd start
+```
 
-- **Live Player Controls**: Real-time track progress, play/pause, skip, volume control, and shuffle.
-- **Universal Search**: Search YouTube & Spotify directly from the browser and queue tracks with one click.
-- **Favorites & Playlists**: Manage your personal library and server playlists with instant sync to Discord.
-- **Discord OAuth2 Login**: Secure role-based login matching your server permissions.
+`npm.cmd start` connects the real Discord bot. Tests do not log in or start
+playback.
 
-### Security notes
+## Security Defaults
 
-- Expose the Web Companion through HTTPS only. Configure the two dashboard cookie/proxy variables above when TLS terminates at a reverse proxy.
-- The optional `data/cookies.txt` is an instance-owner credential, not a user login. Keep it out of source control and Docker build contexts, restrict access to the host, and use a dedicated non-sensitive account if you retain unsupported YouTube playback.
-- Google/YouTube Data API OAuth authorizes metadata and account-management APIs; it does not grant the bot an official audio-stream relay permission.
+- Dashboard sessions are stored in SQLite, not process memory.
+- Discord guild membership and roles are revalidated.
+- Mutating dashboard requests require CSRF tokens.
+- OAuth, search, playback, and cookie uploads are rate limited.
+- The dashboard binds to loopback by default.
+- WebSocket upgrades validate both session and same-origin headers.
+- Queue size, playlist size, media duration, yt-dlp output, process concurrency,
+  and subprocess lifetime are bounded.
+- Docker runs as an unprivileged user with a read-only root filesystem, dropped
+  capabilities, and a host-loopback-only published port.
+- The bundled and container yt-dlp release is pinned to `2026.06.09` and checked
+  against its published SHA-256.
 
----
+## Service Policies
 
-## 📝 License
-
-ISC License. Created for personal use.
+Self-hosting does not override YouTube or Spotify terms. Review their current
+terms before deployment. This project does not represent YouTube, Google,
+Spotify, Discord, yt-dlp, or librespot.

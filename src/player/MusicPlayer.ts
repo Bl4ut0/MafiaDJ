@@ -6,6 +6,9 @@ import { createYtDlpStream } from './AudioStream';
 import { searchYouTube } from '../sources/youtube';
 import { logger } from '../utils/logger';
 import { config } from '../config';
+import ServerSettings from '../database/ServerSettings';
+import { History } from '../database/History';
+import SpotifyAPI from '../spotify/SpotifyAPI';
 
 export class MusicPlayer extends EventEmitter {
     public guildId: string;
@@ -17,16 +20,25 @@ export class MusicPlayer extends EventEmitter {
     public loopMode: 'off' | 'track' | 'queue' = 'off';
     public volume: number = 50;
     public spotifyAutoplay: boolean = false;
-    public spotifyPlaybackEnabled: boolean = true;
+    public spotifyOwnerSyncEnabled: boolean = false;
     public playStartTime: number = 0;
     public pauseStartTime: number = 0;
     public totalPausedMs: number = 0;
     private currentResource: AudioResource | null = null;
+    private jamPollTimer: NodeJS.Timeout | null = null;
+    private lastJamTrackId: string | null = null;
+    private lastJamErrorAt = 0;
 
     constructor(guildId: string = '') {
         super();
         this.guildId = guildId;
         this.queue = new Queue(config.playback?.maxQueueLength ?? 200);
+        const settings = guildId ? ServerSettings.getSettings(guildId) : {};
+        this.volume = Number(settings.default_volume ?? config.playback?.defaultVolume ?? 50);
+        this.spotifyOwnerSyncEnabled = config.spotifyOwnerSyncAvailable
+            && config.spotifyOwnerSyncRiskAcknowledged
+            && settings.spotify_owner_sync_enabled === 1;
+        this.spotifyAutoplay = this.spotifyOwnerSyncEnabled && settings.spotify_jam_enabled === 1;
         this.audioPlayer = createAudioPlayer({
             behaviors: {
                 noSubscriber: NoSubscriberBehavior.Pause,
@@ -71,7 +83,7 @@ export class MusicPlayer extends EventEmitter {
 
                 if (ytUrl) {
                     logger.info(`[MusicPlayer] Fallback found: ${ytUrl}`);
-                    stream = createYtDlpStream(ytUrl);
+                    stream = await createYtDlpStream(ytUrl);
                 } else {
                     logger.warn('[MusicPlayer] Could not find fallback for Spotify track.');
                     this.playNext();
@@ -79,7 +91,7 @@ export class MusicPlayer extends EventEmitter {
                 }
             }
             else {
-                stream = createYtDlpStream(track.url);
+                stream = await createYtDlpStream(track.url);
             }
 
             const resource = createAudioResource(stream, {
@@ -94,6 +106,7 @@ export class MusicPlayer extends EventEmitter {
             this.totalPausedMs = 0;
 
             this.audioPlayer.play(resource);
+            History.add(track, this.guildId);
             this.emit('trackStart', track);
             this.emit('stateChange');
         } catch (error) {
@@ -167,14 +180,71 @@ export class MusicPlayer extends EventEmitter {
     }
 
     public toggleSpotifyAutoplay(): boolean {
+        if (!this.spotifyOwnerSyncEnabled) return false;
         this.spotifyAutoplay = !this.spotifyAutoplay;
+        ServerSettings.updateSetting(this.guildId, 'spotify_jam_enabled', this.spotifyAutoplay ? 1 : 0);
+        if (this.spotifyAutoplay) void this.startJam();
+        else this.stopJam();
         this.emit('stateChange');
         return this.spotifyAutoplay;
     }
 
-    public setSpotifyPlaybackEnabled(enabled: boolean): void {
-        this.spotifyPlaybackEnabled = enabled;
+    public setSpotifyOwnerSyncEnabled(enabled: boolean): void {
+        this.spotifyOwnerSyncEnabled = enabled
+            && config.spotifyOwnerSyncAvailable
+            && config.spotifyOwnerSyncRiskAcknowledged;
+        if (!this.spotifyOwnerSyncEnabled) {
+            this.spotifyAutoplay = false;
+            this.stopJam();
+            ServerSettings.updateSetting(this.guildId, 'spotify_jam_enabled', 0);
+        }
+        ServerSettings.updateSetting(this.guildId, 'spotify_owner_sync_enabled', this.spotifyOwnerSyncEnabled ? 1 : 0);
         this.emit('stateChange');
+    }
+
+    public async startJam(): Promise<boolean> {
+        if (!this.spotifyOwnerSyncEnabled || !config.spotifyRefreshToken || !this.connection) return false;
+        this.spotifyAutoplay = true;
+        ServerSettings.updateSetting(this.guildId, 'spotify_jam_enabled', 1);
+        if (this.jamPollTimer) return true;
+
+        const poll = async () => {
+            try {
+                const playback: any = await SpotifyAPI.getPlaybackState();
+                const item = playback?.item;
+                if (!playback?.is_playing || !item || item.type !== 'track' || item.id === this.lastJamTrackId) return;
+                if (!this.queue.isEmpty() || (this.currentTrack && this.currentTrack.requesterId !== 'Jam Host')) return;
+
+                this.lastJamTrackId = item.id;
+                await this.play({
+                    title: item.name,
+                    artist: item.artists?.map((artist: any) => artist.name).join(', ') || 'Unknown Artist',
+                    url: item.external_urls?.spotify || `https://open.spotify.com/track/${item.id}`,
+                    thumbnail: item.album?.images?.[0]?.url || '',
+                    duration: Math.round((item.duration_ms || 0) / 1000),
+                    source: 'spotify',
+                    requesterId: 'Jam Host',
+                    addedAt: Date.now(),
+                });
+            } catch (error) {
+                if (Date.now() - this.lastJamErrorAt > 60_000) {
+                    logger.warn('[Spotify Jam] Could not read owner playback state:', error);
+                    this.lastJamErrorAt = Date.now();
+                }
+            }
+        };
+
+        await poll();
+        this.jamPollTimer = setInterval(poll, 5_000);
+        this.jamPollTimer.unref();
+        this.emit('stateChange');
+        return true;
+    }
+
+    public stopJam(): void {
+        if (this.jamPollTimer) clearInterval(this.jamPollTimer);
+        this.jamPollTimer = null;
+        this.lastJamTrackId = null;
     }
 
     public setVolume(volume: number) {

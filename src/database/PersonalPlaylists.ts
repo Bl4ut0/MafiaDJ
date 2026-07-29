@@ -47,9 +47,17 @@ export class PersonalPlaylists {
         }
     }
 
-    public static removeTrack(playlistId: number, favoriteId: number): boolean {
-        const stmt = db.prepare('DELETE FROM personal_playlist_tracks WHERE playlist_id = ? AND favorite_id = ?');
-        const result = stmt.run(playlistId, favoriteId);
+    public static removeTrack(playlistId: number, favoriteId: number, userId: string): boolean {
+        const stmt = db.prepare(`
+            DELETE FROM personal_playlist_tracks
+            WHERE playlist_id = ?
+              AND favorite_id = ?
+              AND EXISTS (
+                  SELECT 1 FROM personal_playlists
+                  WHERE id = ? AND user_id = ?
+              )
+        `);
+        const result = stmt.run(playlistId, favoriteId, playlistId, userId);
         return result.changes > 0;
     }
 

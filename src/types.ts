@@ -5,13 +5,13 @@ export interface BotConfig {
     guildId: string;
     spotifyClientId: string;
     spotifyClientSecret: string;
-    spotifyUsername?: string;
-    spotifyPassword?: string;
     spotifyRefreshToken?: string;
+    spotifyOwnerSyncAvailable: boolean;
+    spotifyOwnerSyncRiskAcknowledged: boolean;
     bot?: { logLevel?: string };
     playback?: { defaultVolume?: number; maxQueueLength?: number; maxDurationSeconds?: number };
     permissions?: { voteSkipThreshold?: number; voteStopThreshold?: number };
-    paths?: { ytdlp?: string; ffmpeg?: string; librespot?: string };
+    paths?: { ytdlp?: string; ffmpeg?: string };
     [key: string]: any;
 }
 

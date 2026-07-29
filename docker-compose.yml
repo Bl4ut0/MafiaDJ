@@ -1,17 +1,25 @@
-version: '3.8'
-
 services:
   mafiadj:
     image: bl4ut0/mafiadj:latest
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: mafiadj
     restart: unless-stopped
+    init: true
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     env_file:
       - .env
+    environment:
+      DASHBOARD_HOST: "0.0.0.0"
+      DASHBOARD_ALLOW_INSECURE_HTTP: "true"
     volumes:
       - ./data:/app/data
-      - ./spotify_cache:/app/spotify_cache
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 128

@@ -4,6 +4,7 @@ import { handleButtonInteraction } from './buttonHandler';
 import { ControllerMessage } from '../ui/ControllerMessage'; // Import locally if needed or reuse instance
 import client from '../bot/client';
 import { LibraryManager } from '../ui/library/LibraryManager';
+import { handleSearchInteraction } from './messageHandler';
 
 export async function handleInteraction(interaction: Interaction) {
     if (interaction.isChatInputCommand()) {
@@ -24,8 +25,11 @@ export async function handleInteraction(interaction: Interaction) {
         }
     } else if (interaction.isButton() || interaction.isStringSelectMenu()) { // Handle Select Menus too
 
+        if (interaction.customId.startsWith('search_')) {
+            await handleSearchInteraction(interaction);
+        }
         // Controller Interactions
-        if (interaction.customId.startsWith('controller:')) {
+        else if (interaction.customId.startsWith('controller:')) {
             if (interaction.guildId && interaction.isButton()) {
                 const controller = ControllerMessage.getInstance(client, interaction.guildId);
                 await handleButtonInteraction(interaction, controller);

@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import crypto from 'crypto';
 import { logger } from '../utils/logger';
 
 export function getCookiesFilePath(): string {
@@ -24,11 +25,33 @@ export function saveYouTubeCookies(content: string): boolean {
             return false;
         }
 
-        const lines = content.split(/\r?\n/);
-        const hasYouTubeCookie = lines.some(line => {
+        if (content.includes('\0') || !/^# Netscape HTTP Cookie File/im.test(content)) {
+            logger.warn('[YouTube Cookies] Rejected a non-Netscape cookie file.');
+            return false;
+        }
+
+        const allowedDomain = /(^|\.)(youtube\.com|google\.com|googlevideo\.com)$/i;
+        let hasYouTubeCookie = false;
+        const sanitizedLines = ['# Netscape HTTP Cookie File'];
+        for (const rawLine of content.split(/\r?\n/)) {
+            const httpOnly = rawLine.startsWith('#HttpOnly_');
+            if (!rawLine || (rawLine.startsWith('#') && !httpOnly)) continue;
+            const line = httpOnly ? rawLine.slice('#HttpOnly_'.length) : rawLine;
             const columns = line.split('\t');
-            return columns.length >= 7 && /(^|\.)youtube\.com$/i.test(columns[0]);
-        });
+            if (columns.length !== 7) continue;
+            const [domain, includeSubdomains, cookiePath, secure, expires, name] = columns;
+            if (!allowedDomain.test(domain)
+                || !['TRUE', 'FALSE'].includes(includeSubdomains.toUpperCase())
+                || !cookiePath.startsWith('/')
+                || !['TRUE', 'FALSE'].includes(secure.toUpperCase())
+                || !/^\d+$/.test(expires)
+                || !name) {
+                continue;
+            }
+            if (/(^|\.)youtube\.com$/i.test(domain)) hasYouTubeCookie = true;
+            sanitizedLines.push(`${httpOnly ? '#HttpOnly_' : ''}${columns.join('\t')}`);
+        }
+
         if (!hasYouTubeCookie) {
             logger.warn('[YouTube Cookies] Rejected invalid or non-YouTube cookie file.');
             return false;
@@ -39,11 +62,11 @@ export function saveYouTubeCookies(content: string): boolean {
         if (!fs.existsSync(dataDir)) {
             fs.mkdirSync(dataDir, { recursive: true });
         }
-        const temporaryPath = `${filePath}.tmp`;
-        fs.writeFileSync(temporaryPath, content.trim(), { encoding: 'utf-8', mode: 0o600 });
+        const temporaryPath = `${filePath}.${crypto.randomBytes(8).toString('hex')}.tmp`;
+        fs.writeFileSync(temporaryPath, `${sanitizedLines.join('\n')}\n`, { encoding: 'utf-8', mode: 0o600 });
         fs.renameSync(temporaryPath, filePath);
         fs.chmodSync(filePath, 0o600);
-        logger.info('[YouTube Auth] Saved cookies.txt successfully!');
+        logger.info('[YouTube Auth] Saved a filtered cookies.txt file.');
         return true;
     } catch (err) {
         logger.error('[YouTube Auth] Failed to save cookies:', err);

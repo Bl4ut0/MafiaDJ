@@ -1,12 +1,13 @@
 import { Request, Response, NextFunction } from 'express';
 import { DashboardRole, getDashboardRole } from './roles';
+import crypto from 'crypto';
 
-const ROLE_REVALIDATION_MS = 5 * 60 * 1000;
+const ROLE_REVALIDATION_MS = 60 * 1000;
 
-async function refreshRole(req: Request): Promise<DashboardRole> {
+export async function refreshRole(req: Request): Promise<DashboardRole> {
     const session = req.session as any;
     const now = Date.now();
-    if (session.lastRoleCheck && now - session.lastRoleCheck < ROLE_REVALIDATION_MS) {
+    if (session.role && session.lastRoleCheck && now - session.lastRoleCheck < ROLE_REVALIDATION_MS) {
         return session.role;
     }
 
@@ -16,11 +17,17 @@ async function refreshRole(req: Request): Promise<DashboardRole> {
     return role;
 }
 
-export function requireAuth(req: Request, res: Response, next: NextFunction) {
+export async function requireAuth(req: Request, res: Response, next: NextFunction) {
     if (!req.session?.userId) {
         return res.status(401).json({ error: 'Not authenticated' });
     }
-    next();
+    try {
+        await refreshRole(req);
+        next();
+    } catch {
+        req.session.destroy(() => undefined);
+        return res.status(401).json({ error: 'Discord membership could not be verified. Please sign in again.' });
+    }
 }
 
 export async function requireDJ(req: Request, res: Response, next: NextFunction) {
@@ -53,6 +60,26 @@ export async function requireAdmin(req: Request, res: Response, next: NextFuncti
     }
 }
 
+export function ensureCsrfToken(req: Request): string {
+    if (!req.session.csrfToken) {
+        req.session.csrfToken = crypto.randomBytes(32).toString('base64url');
+    }
+    return req.session.csrfToken;
+}
+
+export function requireCsrf(req: Request, res: Response, next: NextFunction) {
+    if (['GET', 'HEAD', 'OPTIONS'].includes(req.method) || !req.session?.userId) {
+        return next();
+    }
+
+    const expected = Buffer.from(ensureCsrfToken(req));
+    const supplied = Buffer.from(req.get('X-CSRF-Token') ?? '');
+    if (expected.length !== supplied.length || !crypto.timingSafeEqual(expected, supplied)) {
+        return res.status(403).json({ error: 'Invalid request token. Refresh the page and try again.' });
+    }
+    next();
+}
+
 // Extend express-session types
 declare module 'express-session' {
     interface SessionData {
@@ -62,5 +89,7 @@ declare module 'express-session' {
         avatar: string | null;
         role: 'admin' | 'dj' | 'everyone';
         lastRoleCheck: number;
+        csrfToken: string;
+        oauthState: string;
     }
 }

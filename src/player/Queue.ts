@@ -14,6 +14,19 @@ export class Queue {
         return true;
     }
 
+    public enqueueMany(items: QueueItem[]): number {
+        let added = 0;
+        for (const item of items) {
+            if (!this.enqueue(item)) break;
+            added += 1;
+        }
+        return added;
+    }
+
+    public remainingCapacity(): number {
+        return Math.max(0, this.maxLength - this.items.length);
+    }
+
     public dequeue(): QueueItem | undefined {
         return this.items.shift();
     }
@@ -65,8 +78,10 @@ export class Queue {
     }
 
     /** Insert a track at a specific position */
-    public insertAt(index: number, item: QueueItem): void {
+    public insertAt(index: number, item: QueueItem): boolean {
+        if (this.items.length >= this.maxLength) return false;
         const clamped = Math.max(0, Math.min(index, this.items.length));
         this.items.splice(clamped, 0, item);
+        return true;
     }
 }

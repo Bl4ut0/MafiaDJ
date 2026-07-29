@@ -4,7 +4,7 @@ interface LibraryState {
     userId: string;
     dmChannelId: string;
     dmMessageId: string;
-    currentView: 'favorites' | 'playlists' | 'playlist_detail' | 'track_detail' | 'search';
+    currentView: 'favorites' | 'playlists' | 'playlist_detail' | 'track_detail' | 'history' | 'search';
     currentPage: number;
     currentPlaylistId?: number;
     currentTrackId?: number; // Actually favoriteId or track index

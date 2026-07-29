@@ -28,8 +28,8 @@ export class PlaylistsView {
             const selectMenu = new StringSelectMenuBuilder()
                 .setCustomId('lib:playlist_select')
                 .setPlaceholder('Select a playlist')
-                .addOptions(playlists.map(p => ({
-                    label: p.name,
+                .addOptions(playlists.slice(0, 25).map(p => ({
+                    label: p.name.slice(0, 100),
                     value: `${p.id}`
                 })));
             rows.push(new ActionRowBuilder().addComponents(selectMenu));

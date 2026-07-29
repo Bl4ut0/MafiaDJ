@@ -1,7 +1,4 @@
 import { Client, GatewayIntentBits, Collection } from 'discord.js';
-import { config } from '../config';
-import path from 'path';
-import fs from 'fs';
 
 // Define the extended client interface to include commands
 export interface ExtendedClient extends Client {
@@ -19,12 +16,5 @@ const client = new Client({
 }) as ExtendedClient;
 
 client.commands = new Collection();
-
-// Command loading logic would go here
-// ...
-
-client.login(config.discordToken).catch(err => {
-    console.error('Failed to login:', err);
-});
 
 export default client;
