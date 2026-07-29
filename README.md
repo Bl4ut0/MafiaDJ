@@ -92,6 +92,31 @@ Google domains and writes it with restrictive Unix permissions. Use a dedicated
 browser profile/account, upload only over HTTPS, and remove any cookie-export
 extension afterward.
 
+### Browser-assisted session renewal
+
+The included Compose file can also run a separate Chromium desktop for an
+instance-owned YouTube account. This removes the cookie-file transfer: sign in
+interactively from the dashboard's **Open Private Browser** action and the bot
+reads the persistent profile from its own data volume. This is not Google OAuth
+and it does not make YouTube authentication permanent.
+
+Before enabling it, create a **separate HTTPS hostname** in Cloudflare Tunnel
+that points to `http://127.0.0.1:3002`, then protect that hostname with a
+Cloudflare Access policy limited to the administrator. A dashboard login cannot
+secure a separate remote-desktop hostname by itself. After that policy is live:
+
+```env
+YOUTUBE_BROWSER_URL=https://youtube-browser.example.com
+YOUTUBE_BROWSER_ACCESS_PROTECTED=true
+```
+
+The browser service listens only on host loopback and its image is pinned by
+digest. Do not publish its port directly, share its persistent
+`data/youtube-browser` directory, or use a personal Google account. The dashboard exposes the
+launcher only to Discord administrators and only after the explicit Access
+acknowledgement above. If no browser profile is available, the legacy
+admin-only `cookies.txt` upload remains an optional fallback.
+
 Private, members-only, and other account-gated content still requires an
 authorized YouTube account and is not made public by PO tokens. The provider
 improves public playback reliability but cannot reverse an IP block that

@@ -24,6 +24,30 @@ services:
       - no-new-privileges:true
     pids_limit: 128
 
+  # Optional, private desktop used only by a Discord administrator to renew an
+  # instance-owned YouTube session. Publish it only on loopback and route a
+  # dedicated HTTPS hostname through Cloudflare Tunnel + Cloudflare Access.
+  # Do not expose this service directly to the Internet.
+  youtube-browser:
+    image: lscr.io/linuxserver/chromium@sha256:92933242f71646b24d568cab82c8da1eb0838c067a281ad9dce74fe94e7d0fe1
+    restart: unless-stopped
+    init: true
+    ports:
+      - "127.0.0.1:${YOUTUBE_BROWSER_HOST_PORT:-3002}:3000"
+    environment:
+      PUID: "10001"
+      PGID: "10001"
+      TZ: "${TZ:-Etc/UTC}"
+      CHROME_CLI: "https://www.youtube.com/"
+    volumes:
+      - ./data/youtube-browser:/config
+    shm_size: "1gb"
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 256
+
   mafiadj:
     image: bl4ut0/mafiadj:latest
     build:
@@ -39,6 +63,7 @@ services:
       DASHBOARD_HOST: "0.0.0.0"
       DASHBOARD_ALLOW_INSECURE_HTTP: "true"
       YOUTUBE_POT_PROVIDER_URL: "http://pot-provider:4416"
+      YOUTUBE_BROWSER_PROFILE: "${YOUTUBE_BROWSER_PROFILE:-data/youtube-browser/.config/chromium}"
     depends_on:
       pot-provider:
         condition: service_healthy

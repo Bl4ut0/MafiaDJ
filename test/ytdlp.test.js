@@ -28,3 +28,29 @@ test('yt-dlp configures the bgutil HTTP provider when supplied', () => {
         else process.env.YOUTUBE_POT_PROVIDER_URL = previous;
     }
 });
+
+test('yt-dlp uses only an instance data-directory Chromium profile', () => {
+    const fs = require('node:fs');
+    const os = require('node:os');
+    const path = require('node:path');
+    const previous = process.env.YOUTUBE_BROWSER_PROFILE;
+    const originalCwd = process.cwd();
+    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'mafiadj-browser-profile-'));
+    const profile = path.join(workspace, 'data', 'youtube-browser', '.config', 'chromium');
+    fs.mkdirSync(path.join(profile, 'Default'), { recursive: true });
+    fs.writeFileSync(path.join(profile, 'Default', 'Cookies'), 'test');
+
+    try {
+        process.chdir(workspace);
+        process.env.YOUTUBE_BROWSER_PROFILE = 'data/youtube-browser/.config/chromium';
+        const args = ytdlp.getYtDlpBaseArgs();
+        const cookieIndex = args.indexOf('--cookies-from-browser');
+        assert.notEqual(cookieIndex, -1);
+        assert.equal(args[cookieIndex + 1], `chromium:${profile}`);
+    } finally {
+        process.chdir(originalCwd);
+        if (previous === undefined) delete process.env.YOUTUBE_BROWSER_PROFILE;
+        else process.env.YOUTUBE_BROWSER_PROFILE = previous;
+        fs.rmSync(workspace, { recursive: true, force: true });
+    }
+});

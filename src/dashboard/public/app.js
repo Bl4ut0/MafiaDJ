@@ -453,9 +453,18 @@ async function checkYouTubeAuthStatus() {
         window.isYtAuthenticated = !!data.authenticated;
         
         const btn = document.getElementById('btn-yt-connect');
+        const browserBtn = document.getElementById('btn-yt-browser');
         const desc = document.getElementById('yt-auth-desc');
         
-        if (data.authenticated) {
+        if (browserBtn) {
+            browserBtn.disabled = !data.browserLaunchAvailable || !user || user.role !== 'admin';
+            browserBtn.style.display = data.browserLaunchAvailable ? '' : 'none';
+        }
+
+        if (data.browserProfileAvailable) {
+            if (btn) { btn.textContent = 'Fallback cookies'; btn.style.background = ''; btn.disabled = false; }
+            if (desc) desc.textContent = 'A private server-side Chromium profile is available. Only Discord admins can open or replace this instance session.';
+        } else if (data.authenticated) {
             if (btn) { btn.textContent = '✓ Playback cookies loaded'; btn.style.background = 'var(--green)'; btn.disabled = false; }
             if (desc) desc.textContent = 'Instance playback cookies are present. Only Discord admins can replace them.';
         } else {
@@ -463,6 +472,15 @@ async function checkYouTubeAuthStatus() {
             if (desc) desc.textContent = 'No instance playback cookies are configured.';
         }
     } catch {}
+}
+
+function launchYouTubeBrowser() {
+    if (!user || user.role !== 'admin') {
+        showToast("Admin role required");
+        return;
+    }
+    const session = window.open('/api/youtube/browser/launch', '_blank', 'noopener');
+    if (!session) showToast('Allow pop-ups to open the private browser session.');
 }
 
 function startYouTubeAuth() {
@@ -520,6 +538,7 @@ function savePastedCookies() {
 
 // Explicitly export to global window scope so inline onclick handler works
 window.startYouTubeAuth = startYouTubeAuth;
+window.launchYouTubeBrowser = launchYouTubeBrowser;
 window.closeYtAuthModal = closeYtAuthModal;
 window.checkYouTubeAuthStatus = checkYouTubeAuthStatus;
 window.handleCookieFileUpload = handleCookieFileUpload;

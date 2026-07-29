@@ -215,10 +215,13 @@
           
           <div class="setting-row">
             <div class="setting-info">
-              <div class="setting-title">YouTube Account Sign-In</div>
-  <div class="setting-desc" id="yt-auth-desc">An optional instance-managed playback cookie file is loaded.</div>
+              <div class="setting-title">YouTube Playback Session</div>
+              <div class="setting-desc" id="yt-auth-desc">An optional instance-managed browser session or cookie file can be used for account-required videos.</div>
             </div>
-            <button class="search-btn" id="btn-yt-connect" onclick="startYouTubeAuth()">Manage Playback Cookies</button>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end;">
+              <button class="search-btn" id="btn-yt-browser" onclick="launchYouTubeBrowser()">Open Private Browser</button>
+              <button class="search-btn" id="btn-yt-connect" onclick="startYouTubeAuth()">Manage Cookies</button>
+            </div>
           </div>
 
           <h3 style="margin: 24px 0 16px 0; font-size: 16px; color: var(--text);">Admin Actions</h3>
@@ -249,7 +252,7 @@
 <!-- ── YouTube Auth Modal ── -->
 <div id="yt-auth-modal" class="modal-overlay hidden" onclick="if(event.target===this) closeYtAuthModal()">
   <div class="modal-content" style="max-width: 480px; text-align: left; padding: 24px;">
-    <h3 style="margin-bottom: 8px; font-size: 18px; color: var(--text);">YouTube Authentication</h3>
+    <h3 style="margin-bottom: 8px; font-size: 18px; color: var(--text);">YouTube Playback Cookies</h3>
     <p style="font-size: 13px; color: var(--text-sub); margin-bottom: 16px; line-height: 1.5;">
       Upload or paste an instance-owned <code>cookies.txt</code> only when a video requires an account. Use a dedicated account, export only YouTube/Google cookies, and upload only over HTTPS. Google OAuth cannot replace this file.
     </p>

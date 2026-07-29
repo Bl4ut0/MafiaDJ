@@ -1,7 +1,12 @@
 import fs from 'fs';
 import { ChildProcessWithoutNullStreams, spawn } from 'child_process';
 import { config } from '../config';
-import { getCookiesFilePath, isYouTubeAuthenticated } from '../sources/youtubeAuth';
+import {
+    getCookiesFilePath,
+    getYouTubeBrowserProfilePath,
+    isYouTubeAuthenticated,
+    isYouTubeBrowserProfileAvailable,
+} from '../sources/youtubeAuth';
 import { logger } from './logger';
 
 const DEFAULT_TIMEOUT_MS = 30_000;
@@ -82,7 +87,12 @@ export function getYtDlpBaseArgs(): string[] {
         );
     }
 
-    if (isYouTubeAuthenticated()) {
+    // A dedicated, server-side Chromium profile avoids transferring account
+    // cookies through the dashboard. It takes precedence over a legacy static
+    // cookie file, but remains entirely optional.
+    if (isYouTubeBrowserProfileAvailable()) {
+        args.push('--cookies-from-browser', `chromium:${getYouTubeBrowserProfilePath()}`);
+    } else if (isYouTubeAuthenticated()) {
         const cookiePath = getCookiesFilePath();
         if (fs.existsSync(cookiePath)) args.push('--cookies', cookiePath);
     }

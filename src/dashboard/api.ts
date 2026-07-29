@@ -475,11 +475,36 @@ apiRouter.post('/playlists/:id/add', requireAuth, (req: Request, res: Response) 
 });
 
 // ─── YouTube Account Authentication (cookies.txt) ──────────────────────
-import { isYouTubeAuthenticated, saveYouTubeCookies, deleteYouTubeCookies } from '../sources/youtubeAuth';
+import {
+    deleteYouTubeCookies,
+    getYouTubeBrowserLaunchUrl,
+    isYouTubeAuthenticated,
+    isYouTubeBrowserProfileAvailable,
+    saveYouTubeCookies,
+} from '../sources/youtubeAuth';
 
 // GET /api/youtube/status
 apiRouter.get('/youtube/status', requireAuth, (_req: Request, res: Response) => {
-    res.json({ authenticated: isYouTubeAuthenticated() });
+    res.json({
+        authenticated: isYouTubeAuthenticated(),
+        browserProfileAvailable: isYouTubeBrowserProfileAvailable(),
+        browserLaunchAvailable: Boolean(getYouTubeBrowserLaunchUrl()),
+    });
+});
+
+// GET /api/youtube/browser/launch (Admin only)
+// The URL is configured by the operator and must be HTTPS. The browser itself
+// must be behind Cloudflare Access; dashboard authentication alone cannot
+// protect a separate remote-desktop origin.
+apiRouter.get('/youtube/browser/launch', requireAdmin, rateLimit('youtube-browser-launch', 10, 10 * 60 * 1000), (_req: Request, res: Response) => {
+    const browserUrl = getYouTubeBrowserLaunchUrl();
+    if (!browserUrl) {
+        return res.status(503).json({
+            error: 'The private browser session is unavailable. Configure its HTTPS URL and Cloudflare Access protection first.',
+        });
+    }
+    res.setHeader('Cache-Control', 'no-store');
+    res.redirect(302, browserUrl);
 });
 
 // POST /api/youtube/cookies { cookiesContent } (Admin only)
