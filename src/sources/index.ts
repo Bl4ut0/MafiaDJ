@@ -3,6 +3,11 @@ import { getYtInfo } from './youtube'; // We'll update sources/youtube.ts to exp
 import { resolveSpotifyUrl } from '../spotify/SpotifyResolver';
 
 export async function resolveUrl(url: string, requesterId: string): Promise<QueueItem | QueueItem[]> {
+    url = url.trim();
+    if (!url) {
+        throw new Error('Please provide a song name or supported media URL.');
+    }
+
     const spotifyUri = url.match(/^spotify:(track|album|playlist):([a-zA-Z0-9]+)$/);
     if (spotifyUri) {
         url = `https://open.spotify.com/${spotifyUri[1]}/${spotifyUri[2]}`;
@@ -12,7 +17,16 @@ export async function resolveUrl(url: string, requesterId: string): Promise<Queu
     try {
         parsed = new URL(url);
     } catch {
-        throw new Error('Please provide a valid HTTPS URL.');
+        // A slash command may provide a plain song title. Keep this separate
+        // from arbitrary URL fetching so the HTTPS/source allowlist below
+        // continues to protect the server from SSRF-style requests.
+        if (/^[a-z][a-z\d+.-]*:/i.test(url) || url.includes('://')) {
+            throw new Error('Please provide a valid HTTPS URL.');
+        }
+        if (url.length > 200) {
+            throw new Error('Search queries must be 200 characters or fewer.');
+        }
+        return getYtInfo(`ytsearch1:${url}`, requesterId);
     }
 
     if (parsed.protocol !== 'https:') {
