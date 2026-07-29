@@ -10,6 +10,7 @@ import { handleMessage } from './events/messageHandler';
 import { handleVoiceStateUpdate } from './events/voiceStateHandler';
 import { startPlayerHealthCheck } from './events/playerHealthCheck';
 import ready from './events/ready';
+import { checkYtDlpHealth } from './utils/ytdlp';
 
 async function main() {
     try {
@@ -20,6 +21,9 @@ async function main() {
 
         // Load Commands
         await loadCommands();
+
+        // Verify the server-side YouTube provider/plugin path before accepting requests.
+        await checkYtDlpHealth();
 
         // Register Events
         client.on(Events.InteractionCreate, handleInteraction);

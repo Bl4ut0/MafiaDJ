@@ -76,15 +76,26 @@ activity and may create Spotify policy or account-enforcement risk.
 
 ## YouTube Authentication
 
-Do not install a cookie extension as part of the server. Most public playback
-should work without cookies. A current yt-dlp PO-token provider can be configured
-with `YOUTUBE_POT_PROVIDER_URL`.
+Docker Compose starts a private, server-side PO-token provider for public
+YouTube playback. Its port is available only on the internal Compose network;
+Discord users do not install software, export cookies, or authenticate with
+YouTube. MafiaDJ also enables its bundled Node runtime for YouTube JavaScript
+challenge solving and verifies the provider/plugin path during startup.
+
+When running MafiaDJ outside Compose, set `YOUTUBE_POT_PROVIDER_URL` to a
+compatible bgutil HTTP provider. `/debug` reports whether the provider, plugin,
+and public playback probe were ready at startup.
 
 For account-required videos only, an administrator may upload a Netscape
 `cookies.txt` through the dashboard. MafiaDJ filters the file to YouTube and
 Google domains and writes it with restrictive Unix permissions. Use a dedicated
 browser profile/account, upload only over HTTPS, and remove any cookie-export
 extension afterward.
+
+Private, members-only, and other account-gated content still requires an
+authorized YouTube account and is not made public by PO tokens. The provider
+improves public playback reliability but cannot reverse an IP block that
+YouTube has already applied.
 
 The host file still needs a restrictive Windows ACL. Run:
 

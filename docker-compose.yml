@@ -1,4 +1,29 @@
 services:
+  pot-provider:
+    image: brainicism/bgutil-ytdlp-pot-provider:1.3.1@sha256:1aaa43a0ca72dfca6a6d2129a0fb4a23465c25adb1b043f8aff829a20825646b
+    restart: unless-stopped
+    init: true
+    expose:
+      - "4416"
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:4416/ping').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 128
+
   mafiadj:
     image: bl4ut0/mafiadj:latest
     build:
@@ -13,6 +38,10 @@ services:
     environment:
       DASHBOARD_HOST: "0.0.0.0"
       DASHBOARD_ALLOW_INSECURE_HTTP: "true"
+      YOUTUBE_POT_PROVIDER_URL: "http://pot-provider:4416"
+    depends_on:
+      pot-provider:
+        condition: service_healthy
     volumes:
       - ./data:/app/data
     read_only: true

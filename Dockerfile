@@ -15,6 +15,8 @@ FROM node:22-bookworm-slim AS runner
 
 ARG YTDLP_VERSION=2026.06.09
 ARG YTDLP_SHA256=e5d57466682cfa9d61e9cf7c8a4f09b00f4a62af37d3bbdc4bcffdf63615feac
+ARG BGUTIL_PROVIDER_VERSION=1.3.1
+ARG BGUTIL_PLUGIN_SHA256=b8ceec7f76143da172aaf5ebeec0c2d218e5680c063b931586bca48567069b38
 
 WORKDIR /app
 # The generic yt-dlp release is a Python zipapp, so Python is a runtime dependency.
@@ -26,6 +28,11 @@ RUN apt-get update \
         --output /usr/local/bin/yt-dlp \
     && echo "${YTDLP_SHA256}  /usr/local/bin/yt-dlp" | sha256sum --check --strict \
     && chmod 0755 /usr/local/bin/yt-dlp \
+    && mkdir -p /etc/yt-dlp/plugins \
+    && curl --fail --location --proto '=https' --tlsv1.2 \
+        "https://github.com/Brainicism/bgutil-ytdlp-pot-provider/releases/download/${BGUTIL_PROVIDER_VERSION}/bgutil-ytdlp-pot-provider.zip" \
+        --output /etc/yt-dlp/plugins/bgutil-ytdlp-pot-provider.zip \
+    && echo "${BGUTIL_PLUGIN_SHA256}  /etc/yt-dlp/plugins/bgutil-ytdlp-pot-provider.zip" | sha256sum --check --strict \
     && python3 --version \
     && yt-dlp --version \
     && useradd --create-home --uid 10001 --shell /usr/sbin/nologin mafiadj
