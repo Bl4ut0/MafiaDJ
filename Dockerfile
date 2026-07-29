@@ -17,14 +17,17 @@ ARG YTDLP_VERSION=2026.06.09
 ARG YTDLP_SHA256=e5d57466682cfa9d61e9cf7c8a4f09b00f4a62af37d3bbdc4bcffdf63615feac
 
 WORKDIR /app
+# The generic yt-dlp release is a Python zipapp, so Python is a runtime dependency.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ffmpeg curl ca-certificates \
+    && apt-get install -y --no-install-recommends python3 ffmpeg curl ca-certificates \
     && rm -rf /var/lib/apt/lists/* \
     && curl --fail --location --proto '=https' --tlsv1.2 \
         "https://github.com/yt-dlp/yt-dlp/releases/download/${YTDLP_VERSION}/yt-dlp" \
         --output /usr/local/bin/yt-dlp \
     && echo "${YTDLP_SHA256}  /usr/local/bin/yt-dlp" | sha256sum --check --strict \
     && chmod 0755 /usr/local/bin/yt-dlp \
+    && python3 --version \
+    && yt-dlp --version \
     && useradd --create-home --uid 10001 --shell /usr/sbin/nologin mafiadj
 
 COPY --chown=mafiadj:mafiadj package*.json config.json ./
